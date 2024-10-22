@@ -37,10 +37,6 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
 
   <script src="js/sprintf.js"></script> <!-- format variables in a string, used for customizable feedback strings in which the variables are not yet declared -->
 
-  <script src="configuration/experiment_variables.js"></script> <!-- parameters to configure the experiment -->
-
-  <script src="configuration/text_variables.js"></script> <!-- holds all the text variables for easy modification/translation -->
-
   <script src="js/rng.js"></script> <!-- the random number generator for stop time -->
   <script> var myrng = new Math.seedrandom('continuous-movement_seed'); </script> <!-- seed random number generator, any string will do -->
   <script src="js/custom-continuous-movement-plugin.js"></script> <!-- custom plugin for the main continuous-movement trial based on the image-keyboard-response plugin -->
@@ -52,6 +48,127 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
 <body></body>
 
 <script>
+
+  // ----- CUSTOMISE THE STIMULI AND RESPONSES -----
+  // locate the stimuli that will be used in the experiment
+  var pd = true;  // whether to add photodiode dark square in the corner during fixation
+  var fix_stim = 'images/fix.png';
+  var circle_stim = 'images/circle.png';
+  var go_stim = ['images/go_stim1.png', 'images/go_stim2.png', 'images/go_stim3.png',
+                 'images/go_stim4.png', 'images/go_stim5.png', 'images/go_stim6.png',
+                 'images/go_stim7.png', 'images/go_stim8.png', 'images/go_stim9.png',
+                 'images/go_stim10.png'];
+  var start_stim = 'images/start.png';
+  var stop_stim = 'images/stop.png';
+  var tone_stim = 'audio/tone.mp3';
+
+
+  // ----- CUSTOMISE THE BASIC DESIGN -----
+
+  let stop_prop = 0.4;
+  let n_trials_per_block = 40;
+  var n_blocks_exp = 6;
+  var n_secs = [6, 5, 4, 3];
+
+  let t_stop_min = 0.5 // minimum countdown time at which to stop
+  let t_stop_max = 2.5   // maximum time at which to stop
+  //note: must be less than smallest n_secs value
+
+
+  // ----- CUSTOMISE THE TIME INTERVALS (in milliseconds)-----
+
+  let ITI = 2000;   // fixed blank intertrial interval
+  let FIX = 250;    // fixed fixation presentation
+  let MAXRT = 1250; // fixed maximum reaction time
+  let iFBT = 750;   // immediate feedback interval (during the practice phase)
+  let bFBT = 15000; // break interval between blocks
+
+
+  // ----- CUSTOMISE INPUT/OUTPUT VARIABLES -----
+  // participant ID:
+  // - ID via participant (e.g. when the participant gets a number via experimenter)
+  // - ID via the URL of the experiment: 'XXXX.html?subject=15'(subject is the current keyword)
+  // - determine ID at random with jsPsych.randomization.randomID().
+
+  var id = 'participant'; // use one of these three options: 'participant', 'url', 'random'
+
+
+  // ----- CUSTOMISE SCREEN VARIABLES -----
+  // Please note that Safari does not support keyboard input when in full mode!!!
+  // Therefore, this browser will be excluded by default
+
+  var fullscreen = true; // Fullscreen mode or not?
+  var minWidth = 800; // minimum width of the experiment window
+  var minHeight = 600; // minimum height of the experiment window
+
+
+  // ----- CUSTOMISE END-OF-EXPERIMENT REDIRECTION -----
+  // !!!!! use https ! (and link to your own experiment with https)
+  // should we redirect to another URL when the experiment ends? (useful for redirecting to e.g. Prolific or MTurk)
+
+  var redirect_onCompletion = true;
+  var redirect_link = 'html/debrief.html';
+
+  // instructions page 1
+  let page1 = [
+    "<p>In this experiment, a circle will appear in the center " +
+    "of the screen.</p><p>Your task is to move the cursor around the " +
+    "circle at a steady rate until the word <strong>STOP</strong> " +
+    "appears.</p><p>On some trials, the <strong>STOP</strong> will " +
+    "occur at the end of a countdown, on others it will interupt the " +
+    "countdown before it is completed.</p>"
+  ];
+
+  // instructions page 2
+  // Do not forget to adjust the number of blocks
+  let page2 = [
+    '<p> It is important that you not move the mouse before the <strong>START</strong> cue is shown. <\p>' +
+    '<p> Remember that the task is to stop when the <strong>STOP</strong> cue is shown. <\p>' +
+    '<p> We will start with a short practice block in which you will receive immediate feedback. ' +
+    'You will no longer receive immediate feedback in the experimental phase. </p>'+
+    '<p> However, at the end of each experimental block, ' +
+    'there will be a 15 second break. During this break, we will show you some information about ' +
+    'your mean performance in the previous block.</p>' +
+    '<p> The experiment consists of 1 practice block and ' + n_blocks_exp +
+    ' experimental blocks.</p>'
+  ];
+
+  // informed consent text
+  let informed_consent_text = [
+    '<p> Stop here if you have not previously provided informed consent. </p>'
+  ];
+
+  // trial by trial feedback messages
+  let correct_msg = 'good job';
+
+  // block feedback
+  let no_signal_header = "<p><b>GO TRIALS: </b></p>";
+  let avg_rt_msg = "<p>Average response time = %.2f seconds</p>";
+  let prop_inc_msg = "<p>Proportion too far from the circle = %.2f (should be 0)</p>";
+  let prop_ww_msg = "<p>Proportion wrong way = %.2f (should be 0)</p>";
+  let prop_slow_msg = "<p>Proportion too slow = %.2f (should be 0)</p>";
+  let prop_early_msg = "<p>Proportion early stops = %.2f (should be 0)</p>";
+  let stop_signal_header = "<p><b>STOP-SIGNAL TRIALS: </b></p>";
+  let next_block_msg = "<p>You can take a short break, the next block starts in <span id='timer'>15</span></p>";
+  let final_block_msg = "<p>Press space to continue...</p>"; // after the final block they don't need a break
+
+  // other
+  var label_previous_button = 'Previous';
+  var label_next_button = 'Next';
+  var label_consent_button = 'I agree';
+  var full_screen_message = '<p>The experiment will switch to fullscreen mode when you push the button below. </p>';
+  var welcome_message = ['<p>Welcome to the experiment.</p>' + '<p>Press "Next" to begin.</p>'];
+  var not_supported_message = ['<p>This experiment requires the Chrome or Firefox webbrowser.</p>'];
+  var subjID_instructions = "Enter your participant ID.";
+  var age_instructions = "Enter your age.";
+  var sex_instructions = "Choose your sex.";
+  var sex_options = ['Female','Male', 'Other', 'Prefer not to say'];
+  var text_at_start_block = '<p>Press space to begin.</p>';
+  var get_ready_message = '<p>Get ready...</p>';
+  var fixation_text = '<div style="font-size:60px;">TEST</div>';
+  var end_message = "<p>Thank you for your participation.</p>" +
+    "<p>Press space to finalize the experiment.</p>";
+
 
   /* #########################################################################
 
@@ -66,7 +183,7 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
   var block_ind = 0; // block indexing variables: block 0 is considered to be the practice block
   var sub = null;
   var age = null;
-  var gender = null;
+  var sex = null;
   var fix_time = null;
   var signal = null;
   var count = null;
@@ -112,20 +229,14 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
 
   ######################################################################### */
 
-  // Since we have two stimuli, the number of trials of the basic design = 2 * nstim
-  // This design will later be repeated a few times for each block
-  // (number of repetitions is also defined in 'experiment_variables.js')
-  var ngostop = 1 / nprop      // covert proportion to trial numbers. E.g. 1/5 = 1 stop signal and 4 go
-  var signalArray = Array(ngostop-1).fill('go'); // no-signal trials
-  signalArray[ngostop-1] = ('stop'); // stop-signal trials
+  var trial_types = Array.prototype.concat(
+    Array(Math.ceil(n_trials_per_block / n_secs.length * (1 - stop_prop))).fill('go'),
+    Array(Math.ceil(n_trials_per_block / n_secs.length * stop_prop)).fill('stop')
+  ).slice(1, Math.ceil(n_trials_per_block / n_secs.length));
 
-  // create factorial design from time and signal(nstim)
-  var factors = {
-  	time: Nsecs,
-    signal: signalArray,
-  };
-
-  var design = jsPsych.randomization.factorial(factors, 1);
+  var design = jsPsych.randomization.factorial(
+    {time : n_secs, trial_type: trial_types}, 1
+  );
   //console.log(design); // uncomment to print the design in the browser's console
 
   /* #########################################################################
@@ -278,18 +389,18 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
     }
   };
 
-  // get participant's gender and add it to the datafile
+  // get participant's sex and add it to the datafile
   // the prompt and options are declared in the configuration/text_variables.js file
-  var gender_survey = {
+  var sex_survey = {
     type: 'survey-multi-choice',
     questions: [{
-      prompt: gender_instructions,
-      options: gender_options,
+      prompt: sex_instructions,
+      options: sex_options,
       required: true
     }, ],
     button_label: label_next_button,
     on_finish: function(data) {
-      gender = JSON.parse(data.responses).Q0;
+      sex = JSON.parse(data.responses).Q0;
     }
   };
 
@@ -303,7 +414,7 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
     button_label_next: label_next_button,
     on_finish: function(data) {
       var subjID = jsPsych.data.get().last(1).values()[0]['participantID'];
-      data_row = "participantID,age,gender,block_i,trial_i,fix_time," +
+      data_row = "participantID,age,sex,block_i,trial_i,fix_time," +
                  "signal,count,stop_time,goRT,RT,go_pos_x," +
                  "go_pos_y,go_times,stop_pos_x,stop_pos_y,stop_times,exclude," +
                  "focus,Fullscreen,browser_name,browser_version,os_name,os_version," +
@@ -347,7 +458,7 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
   };
 
   var write_cm_data = function() {    
-      data_row = sub + ',' + age + ',' + gender + ',' + 
+      data_row = sub + ',' + age + ',' + sex + ',' + 
                block_ind + ',' + trial_ind + ',' + fix_time + ',' +
                signal + ',' + count + ',' + stop_time + ',' +
                goRT + ',' + RT + ',' +
@@ -492,7 +603,7 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
     type: 'call-function',
     func: function() {
       if (block_ind == 0) { // this limits the amount of trials in the practice block
-        if (trial_ind > (NdesignReps_practice * ngostop)) {
+        if (trial_ind > n_trials_per_block) {
           jsPsych.endCurrentTimeline();
         }
       }
@@ -531,7 +642,7 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
   }
 
   start_timeline.push(age_survey);
-  start_timeline.push(gender_survey);
+  start_timeline.push(sex_survey);
   start_timeline.push(trigger_connect);
 
   if (fullscreen){
@@ -549,14 +660,14 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
     timeline: [stimulus, iti, evaluate_end_if_practice],
     timeline_variables: design,
     randomize_order: true,
-    repetitions: NdesignReps_exp,
+    repetitions: 1,
   };
 
   // again: combine the following screen in one timeline, which constitues of the procedure of one block
   var block_procedure = {
     timeline: [block_start, block_get_ready, trial_procedure, block_feedback],
     randomize_order: false,
-    repetitions: NexpBL + 1, // add one because the first block is the practice block
+    repetitions: n_blocks_exp + 1, // add one because the first block is practice
   };
 
   // end of the experiment
