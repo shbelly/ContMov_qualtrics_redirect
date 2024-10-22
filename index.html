@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+
+<html>
+
+<!--
+
+Continuous Movement
+
+Modified from github.com/fredvburg/STOP-IT
+
+AUTHORS: Alex Rockhill (2020)
+
+DESCRIPTION: This is the jsPsych version of the continuous movement task
+
+-->
+
+<head> <!-- import the jsPsych core library, specific plugins, jquery and some other scripts-->
+
+  <title>Continuous Movement</title> <!-- defines a title in the browser tab -->
+
+  <script src="js/jsPsych/jspsych.js"></script> <!-- jsPsych core library -->
+
+  <script src="js/jsPsych/plugins/jspsych-instructions.js"></script> <!-- plugins define specific tasks, e.g., presenting instructions -->
+
+  <script src="js/jsPsych/plugins/jspsych-html-keyboard-response.js"></script>
+
+  <script src="js/jsPsych/plugins/jspsych-survey-text.js"></script> <!-- beta 6.1 version has the 'input required' function for text fields -->
+
+  <script src="js/jsPsych/plugins/jspsych-survey-multi-choice.js"></script>
+
+  <script src="js/jsPsych/plugins/jspsych-call-function.js"></script>
+  <script src="js/jsPsych/plugins/jspsych-fullscreen.js"></script>
+
+  <script src="js/jquery-3.6.0.min.js"></script> <!-- the jquery library is used to communicate with the server (to store the data) through "AJAX" and PHP -->
+
+  <script src="js/bowser.js"></script> <!-- a browser and operating system detector -->
+
+  <script src="js/sprintf.js"></script> <!-- format variables in a string, used for customizable feedback strings in which the variables are not yet declared -->
+
+  <script src="configuration/experiment_variables.js"></script> <!-- parameters to configure the experiment -->
+
+  <script src="configuration/text_variables.js"></script> <!-- holds all the text variables for easy modification/translation -->
+
+  <script src="js/rng.js"></script> <!-- the random number generator for stop time -->
+  <script> var myrng = new Math.seedrandom('continuous-movement_seed'); </script> <!-- seed random number generator, any string will do -->
+  <script src="js/custom-continuous-movement-plugin.js"></script> <!-- custom plugin for the main continuous-movement trial based on the image-keyboard-response plugin -->
+  
+  <link href="js/jsPsych/css/jspsych.css" rel="stylesheet" type="text/css"></link> <!-- standard jsPsych css stylesheet -->
+
+</head>
+
+<body></body>
+
+<script>
+
+  /* #########################################################################
+
+  Initialize variables
+
+  ######################################################################### */
+
+  // Initialize some important variables
+
+  var timeline = []; // this array stores the events we want to run in the experiment
+  var trial_ind = 1; // trial indexing variable starts at 1 for convenience
+  var block_ind = 0; // block indexing variables: block 0 is considered to be the practice block
+  var sub = null;
+  var age = null;
+  var gender = null;
+  var fix_time = null;
+  var signal = null;
+  var count = null;
+  var stop_time = null;
+  var goRT = null;
+  var RT = null;
+  var go_pos_x = null;
+  var go_pos_y = null;
+  var go_times = null;
+  var stop_pos_x = null;
+  var stop_pos_y = null;
+  var stop_times = null;
+  var exclude = null;
+  var data_str = '';
+
+  // variables for block feedback
+  var n_stop = 0;
+  var n_go = 0;
+  var inc = 0;
+  var ww = 0;
+  var slow = 0;
+  var av_goRT = 0;
+  var av_ssRT = 0;
+  var early_ns = 0;
+
+  var focus = 'focus'; // tracks if the current tab/window is the active tab/window, initially the current tab should be focused
+  var fullscr_ON = 'no'; // tracks fullscreen activity, initially not activated
+  var redirect_timeout = 1500; // set this so that data is saved before redirect!
+
+  // is the experiment running from a server or not? (this determines if data is saved on server or offline)
+  var online = (document.location.host) ? true: false;
+  var port;  // variable for bluetooth device
+  var output_stream;  // bluetooth output stream
+  var output_done;  // bluetooth boolean for whether stream has finished
+  var bluetooth;  // used for COM port but not bluetooth
+
+  // define the images to be loaded, the actual preloading occurs in the jsPsych.init function at the bottom
+  var pre_load_stimuli = go_stim.concat([fix_stim, start_stim, stop_stim]);
+
+  /* #########################################################################
+
+  Create the design based on the input from 'experiment_variables.js'
+
+  ######################################################################### */
+
+  // Since we have two stimuli, the number of trials of the basic design = 2 * nstim
+  // This design will later be repeated a few times for each block
+  // (number of repetitions is also defined in 'experiment_variables.js')
+  var ngostop = 1 / nprop      // covert proportion to trial numbers. E.g. 1/5 = 1 stop signal and 4 go
+  var signalArray = Array(ngostop-1).fill('go'); // no-signal trials
+  signalArray[ngostop-1] = ('stop'); // stop-signal trials
+
+  // create factorial design from time and signal(nstim)
+  var factors = {
+  	time: Nsecs,
+    signal: signalArray,
+  };
+
+  var design = jsPsych.randomization.factorial(factors, 1);
+  //console.log(design); // uncomment to print the design in the browser's console
+
+  /* #########################################################################
+
+  Define the individual events/trials that make up the experiment
+
+  ######################################################################### */
+
+  // welcome message trial. Also: end the experiment if browser is not Chrome or Firefox
+
+  var welcome = {
+    type: "instructions",
+    pages: welcome_message,
+    show_clickable_nav: true,
+    allow_backward: false,
+    button_label_next: label_next_button,
+    on_start: function(trial){
+      if (bowser.name == 'Firefox' || bowser.name == 'Chrome'){
+        trial.pages = welcome_message;
+      } else {
+        trial.pages = not_supported_message;
+        setTimeout(function(){location.href="html/not_supported.html"}, 2000);
+      }
+    }
+  };
+
+  // these events turn fullscreen mode on in the beginning and off at the end, if enabled (see experiment_variables.js)
+  var fullscr = {
+    type: 'fullscreen',
+    fullscreen_mode: true,
+    message: full_screen_message,
+    button_label: label_next_button,
+  };
+
+  var fullscr_off = {
+    type: 'fullscreen',
+    fullscreen_mode: false,
+    button_label: label_next_button,
+  };
+
+  var trigger_connect = {
+    type: 'html-keyboard-response',
+    stimulus: '<div>Click the button connect triggers ' +
+              'or press any key to skip</div>' +
+              ("serial" in navigator ? (
+                '<div><button id="Bluetooth" type="button" class=>Bluetooth</button></div>' +
+                '<div><button id="Serial" type="button" class=>Serial</button></div>') : 
+                'Serial connections are only supported in Chrome'),
+    choices: jsPsych.ALL_KEYS,
+    response_ends_trial: true,
+    on_load: function() {
+      if ("serial" in navigator) {
+        const bluetooth_button = document.getElementById('Bluetooth');
+        bluetooth_button.addEventListener('click',  connect_bluetooth);
+        const serial_button = document.getElementById('Serial');
+        serial_button.addEventListener('click',  connect_serial);
+      }
+    },
+    on_finish: function() {
+      const bluetooth_button = document.getElementById('Bluetooth');
+      if (bluetooth_button != null) {
+        bluetooth_button.removeEventListener('click', connect_bluetooth);
+      }
+      const serial_button = document.getElementById('Serial');
+      if (serial_button != null) {
+        serial_button.removeEventListener('click', connect_serial);
+      }
+    }
+  }
+
+  async function connect_bluetooth() {
+    jsPsych.finishTrial({correct_response: true});
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 9600 });
+    const encoder = new TextEncoderStream();
+    output_done = encoder.readable.pipeTo(port.writable);
+    output_stream = encoder.writable;
+    bluetooth = true;
+    console.log('Bluetooth connected to port ' + port);
+  }
+
+  async function connect_serial() {
+    jsPsych.finishTrial({correct_response: true});
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 115200, bufferSize: 8, dataBits: 8,
+                      stopBits: 1});
+    const encoder = new TextEncoderStream();
+    output_done = encoder.readable.pipeTo(port.writable);
+    output_stream = encoder.writable;
+    bluetooth = false;
+    console.log('Serial connected to port ' + port);
+  }
+
+  async function disconnect_triggers() {
+    if (output_stream) {
+      await output_stream.getWriter().close();
+      await output_done;
+      output_stream = null;
+      output_done = null;
+    }
+    await port.close();
+    port = null;
+    console.log('Bluetooth/Serial disconnected');
+  }
+
+  function trigger_write(cmd) {
+    // Write to output stream
+    console.log('[SEND]', cmd);
+    if (output_stream == null) {
+      return
+    }
+    const writer = output_stream.getWriter();
+    if (bluetooth) {
+      writer.write(cmd);
+      // Ignores sending carriage return if sending Ctrl+C
+      if (cmd !== "\x03") {
+        writer.write("\r"); // Important to send a carriage return after a command
+      }
+    } else {
+      writer.write(String.fromCharCode(cmd));
+    }
+    writer.releaseLock();
+  }
+
+  // if enabled below, get participant's id from participant and add it to the datafile.
+  // the prompt is declared in the configuration/text_variables.js file
+  var sub_survey = {
+    type: 'survey-text',
+    questions: [{
+      prompt: subjID_instructions,
+      required: true
+    }, ],
+    button_label: label_next_button,
+    on_finish: function(data) {
+      sub = JSON.parse(data.responses).Q0;
+    }
+  };
+
+  // get participant's age and add it to the datafile
+  // the prompt is declared in the configuration/text_variables.js file
+  var age_survey = {
+    type: 'survey-text',
+    questions: [{
+      prompt: age_instructions,
+      required: true
+    }, ],
+    button_label: label_next_button,
+    on_finish: function(data) {
+      age = JSON.parse(data.responses).Q0;
+    }
+  };
+
+  // get participant's gender and add it to the datafile
+  // the prompt and options are declared in the configuration/text_variables.js file
+  var gender_survey = {
+    type: 'survey-multi-choice',
+    questions: [{
+      prompt: gender_instructions,
+      options: gender_options,
+      required: true
+    }, ],
+    button_label: label_next_button,
+    on_finish: function(data) {
+      gender = JSON.parse(data.responses).Q0;
+    }
+  };
+
+  // instruction trial
+  // the instructions are declared in the configuration/text_variables.js file
+  var instructions = {
+    type: "instructions",
+    pages: [page1, page2],
+    show_clickable_nav: true,
+    button_label_previous: label_previous_button,
+    button_label_next: label_next_button,
+    on_finish: function(data) {
+      var subjID = jsPsych.data.get().last(1).values()[0]['participantID'];
+      data_row = "participantID,age,gender,block_i,trial_i,fix_time," +
+                 "signal,count,stop_time,goRT,RT,go_pos_x," +
+                 "go_pos_y,go_times,stop_pos_x,stop_pos_y,stop_times,exclude," +
+                 "focus,Fullscreen,browser_name,browser_version,os_name,os_version," +
+                 "tablet,mobile,screen_resolution,window_resolution\n";
+      appendData('CM_data_'+ sub + '.csv', data_row);
+    }
+  };
+
+  // inter-trial interval
+  var iti_start_t;
+  var iti = {
+    type: 'html-keyboard-response',
+    stimulus: '',
+    choices: jsPsych.NO_KEYS,
+    trial_duration: ITI,
+    on_start: function() {
+      iti_start_t = performance.now();
+      setTimeout(write_cm_data, 20);  // ensure screen cleared first
+    },
+    on_finish: function() {
+      console.log('ITI took ' + (performance.now() - iti_start_t) + 'ms, ' +
+                  'was supposed to take ' + ITI + ' ms');
+    }
+  }
+
+  // start of each block
+  // the start message is declared in the configuration/text_variables.js file
+  var block_start = {
+    type: 'html-keyboard-response',
+    stimulus: text_at_start_block,
+    choices: ['space']
+  };
+
+  // get ready for beginning of block
+  // the get ready message is declared in the configuration/text_variables.js file
+  var block_get_ready = {
+    type: 'html-keyboard-response',
+    stimulus: get_ready_message,
+    choices: jsPsych.NO_KEYS,
+    trial_duration: 2000,
+  };
+
+  var write_cm_data = function() {    
+      data_row = sub + ',' + age + ',' + gender + ',' + 
+               block_ind + ',' + trial_ind + ',' + fix_time + ',' +
+               signal + ',' + count + ',' + stop_time + ',' +
+               goRT + ',' + RT + ',' +
+               go_pos_x.join('\t') + ',' + go_pos_y.join('\t') + ',' +
+               go_times.join('\t') + ',' + stop_pos_x.join('\t') + ',' +
+               stop_pos_y.join('\t') + ',' + stop_times.join('\t') + ',' +
+               exclude + ',' + focus + ',' + fullscr_ON + ',' +
+               bowser.name + ',' + bowser.version + ',' + bowser.osname + ',' +
+               bowser.os_version + ',' + String(bowser.tablet) + ',' +
+               String(bowser.mobile) + ',' +
+               screen.width + ' x ' + screen.height + ',' +
+               window.innerWidth + ' x ' + window.innerHeight + '\n'
+    if (online){
+      const size = 350;
+      const num_chunks = Math.ceil(data_row.length / size);
+      const chunks = new Array(num_chunks);
+      const t_now = performance.now();
+      for (let i = 0, o = 0; i < num_chunks; i++, o += size) {
+        console.log('Writing chunk ' + i + '/' + num_chunks);
+        appendData('CM_data_' + sub + '.csv', data_row.substr(o, size));
+      }
+      console.log('Took ' + (performance.now() - t_now) + 'ms to save');
+    } else {
+      data_str += data_row;
+    }
+  }
+
+  // the main stimulus
+  var stimulus = {
+    type: 'custom-continuous-movement-plugin',
+    fixation_duration: FIX,
+    time: jsPsych.timelineVariable('time'),
+    signal: jsPsych.timelineVariable('signal'),
+    trial_duration: MAXRT, // this is the max duration of waiting for the pariticipant to stop
+    tone: tone_stim,
+    feedback: function() { return block_ind == 0 },
+    feedback_duration: iFBT,
+    iti: ITI,
+    on_start: function(data) {  
+      trigger_write(10);
+      fix_time = performance.now();
+    },
+    on_finish: function(data) {
+      data.response = String(data.response); // convert explicitly to string so that "undefined" (no response) does not lead to empty cells in the datafile
+      signal = data.signal;
+      count = data.count;
+      stop_time = data.stop_time;
+      goRT = data.goRT;
+      RT = data.RT;
+      go_pos_x = data.go_pos_x;
+      go_pos_y = data.go_pos_y;
+      go_times = data.go_times;
+      stop_pos_x = data.stop_pos_x;
+      stop_pos_y = data.stop_pos_y;
+      stop_times = data.stop_times;
+      exclude = data.exclude;
+      trial_ind++;
+
+      // block feedback
+      if (signal == 'go') {
+        n_go++;
+      } else {
+        n_stop++;
+      }
+      if (exclude == 'too far from the circle') {
+        inc++;
+      } else if (exclude == 'wrong way') {
+        ww++;
+      } else if (exclude == 'too slow') {
+        slow++;
+      } else if (exclude == 'remember: don\'t stop too early') {
+        early_ns++;
+      }
+      if (goRT != null) {
+        av_goRT += goRT;
+      }
+      if (RT != null) {
+        av_ssRT += RT;
+      }
+    }
+  };
+
+  // at the end of the block, give feedback on performance
+  var block_feedback = {
+    type: 'html-keyboard-response',
+    trial_duration: bFBT,
+    choices: function() {
+      if (block_ind == NexpBL){
+        return ['p', 'space']
+      } else {
+        return ['p'] // 'p' can be used to skip the feedback, useful for debugging
+      }
+    },
+
+    stimulus: function() {
+      if (block_ind == NexpBL){
+        var next_block_text = final_block_msg
+      } else { // make a countdown timer
+        var count = (bFBT / 1000);
+        var counter;
+        clearInterval(counter);
+        counter = setInterval(timer, 1000); //1000 will run it every 1 second
+        function timer(){
+          count--;
+          if (count <= 0){
+              clearInterval(counter);
+          }
+          document.getElementById("timer").innerHTML = count;
+        }
+        var next_block_text = next_block_msg // insert countdown timer
+      }
+
+      // the final text to present. Can also show correct and incorrect proportions if requested.
+      return [
+        sprintf(prop_inc_msg, inc / (n_go + n_stop)) +
+        sprintf(prop_ww_msg, ww / (n_go + n_stop)) +
+        sprintf(prop_slow_msg, slow / (n_go + n_stop)) +
+        no_signal_header +
+        sprintf(avg_rt_msg, av_goRT / n_go / 1000) +
+        sprintf(prop_early_msg, early_ns / (n_go + n_stop)) +
+        stop_signal_header +
+        sprintf(avg_rt_msg, av_ssRT / n_stop / 1000) +
+        next_block_msg
+      ]
+    },
+    on_finish: function() {
+      trial_ind = 1; // reset trial counter
+      block_ind = block_ind + 1; // next block
+      // reset variables
+      n_stop = 0;
+      n_go = 0;
+      inc = 0;
+      ww = 0;
+      slow = 0;
+      av_goRT = 0;
+      av_ssRT = 0;
+      early_ns = 0;
+    }
+  };
+
+  var evaluate_end_if_practice = {
+    type: 'call-function',
+    func: function() {
+      if (block_ind == 0) { // this limits the amount of trials in the practice block
+        if (trial_ind > (NdesignReps_practice * ngostop)) {
+          jsPsych.endCurrentTimeline();
+        }
+      }
+    }
+  };
+
+  // end trial and save the data
+  var goodbye = {
+    type: "html-keyboard-response",
+    stimulus: end_message,
+    on_start: function(data) {
+      if (!online) {
+        save_offline_data();
+      }
+    }
+  };
+
+  /* #########################################################################
+
+  combine trials in procedures (create nested timeline)
+
+  ######################################################################### */
+
+  // only ask for participant id if 'id' = 'particpant' (experiment_variables.js)
+  // if 'id' = 'url', get it from url; otherwise, generate random value
+  // only go into fullscreen mode if 'fullscreen' is true
+  var start_timeline = [welcome];
+
+  if (id == "participant"){
+    start_timeline.push(sub_survey);
+  } else if (id == "url"){
+    var urlvar = jsPsych.data.urlVariables();
+    var code = urlvar.subject; jsPsych.data.addProperties({participantID: code});
+  } else {
+    var code = jsPsych.randomization.randomID(); jsPsych.data.addProperties({participantID: code});
+  }
+
+  start_timeline.push(age_survey);
+  start_timeline.push(gender_survey);
+  start_timeline.push(trigger_connect);
+
+  if (fullscreen){
+    start_timeline.push(fullscr);
+  }
+  start_timeline.push(instructions);
+
+  // start the experiment with the previously defined start_timeline trials
+  var start_procedure = {
+    timeline: start_timeline,
+  };
+
+  // timeline_variables determine the stimuli in the 'stimulus' trial
+  var trial_procedure = {
+    timeline: [stimulus, iti, evaluate_end_if_practice],
+    timeline_variables: design,
+    randomize_order: true,
+    repetitions: NdesignReps_exp,
+  };
+
+  // again: combine the following screen in one timeline, which constitues of the procedure of one block
+  var block_procedure = {
+    timeline: [block_start, block_get_ready, trial_procedure, block_feedback],
+    randomize_order: false,
+    repetitions: NexpBL + 1, // add one because the first block is the practice block
+  };
+
+  // end of the experiment
+  if (fullscreen){
+    end_timeline = [fullscr_off, goodbye]
+  } else {
+    end_timeline = [goodbye]
+  }
+
+  var end_procedure = {
+    timeline: end_timeline, // here, you could add questionnaire trials etc...
+  };
+
+  // finally, push all the procedures to the overall timeline
+  timeline.push(start_procedure, block_procedure, end_procedure)
+
+  /* #########################################################################
+
+  the functions that save the data and initiates the experiment
+
+  ######################################################################### */
+
+  // function that appends data to an existing file (or creates the file if it does not exist)
+
+  async function appendData(filename, filedata) {
+    $.ajax({ // make sure jquery-1.7.1.min.js is loaded in the html header for this to work
+      type: 'post',
+      cache: false,
+      async: false,  // don't append in the wrong order
+      url: 'php/save_data_append.php',
+      timeout: 2000,
+      data: {
+        filename: filename,
+        filedata: filedata
+      },
+    });
+  };
+
+  function save_offline_data() {   // https://gist.github.com/liabru/11263260
+    var blob = new Blob([data_str], { type: 'text/plain;charset=utf-8' });
+    anchor = document.createElement('a');
+    anchor.download = 'CM_data_' + sub + '.csv';
+    anchor.href = (window.webkitURL || window.URL).createObjectURL(blob);
+    anchor.dataset.downloadurl = ['text/plain', anchor.download, anchor.href].join(':');
+    anchor.click();
+  }
+
+  // run the experiment!
+  jsPsych.init({
+    timeline: timeline,
+    preload_images: pre_load_stimuli,
+    preload_audio: [tone_stim],
+    on_interaction_data_update: function(data) { //interaction data logs if participants leaves the browser window or exits full screen mode
+      interaction = data.event;
+      if (interaction.includes("fullscreen")){
+ // some unhandy coding to circumvent a bug in jspsych that logs fullscreenexit when actually entering
+        if (fullscr_ON == 'no') {fullscr_ON = 'yes'; return fullscr_ON}
+        else if (fullscr_ON == 'yes') {fullscr_ON = 'no'; return fullscr_ON}
+      }  else if (interaction == 'blur' || interaction == 'focus'){
+        focus = interaction;
+        return focus;
+      }
+    },
+    exclusions: { // browser window needs to have these dimensions, if not, participants get the chance to maximize their window, if they don't support this resolution when maximized they can't particiate.
+      min_width: minWidth,
+      min_height: minHeight
+    },
+    on_finish: function() {
+      if (redirect_onCompletion){
+        setTimeout("location.href = '" + redirect_link + "';", redirect_timeout); // redirect to another URL with a certain delay, only when redirect_onCompletion is set to 'true'
+      }
+    },
+  })
+
+</script>
+</html>
