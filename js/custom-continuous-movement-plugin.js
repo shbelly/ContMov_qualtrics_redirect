@@ -35,13 +35,19 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         default: 6,
         description: 'The time to count down from'
       },
+      t_stop_min: {
+        type: jsPsych.plugins.parameterType.FLOAT,
+        pretty_name: 'Minimum stop time',
+        default: 0.5,
+        description: 'The closest the stop signal can be to the natural end of the countdown.'
+      },
       prompt: {
         type: jsPsych.plugins.parameterType.STRING,
         pretty_name: 'Prompt',
         default: null,
         description: 'Any content here will be displayed below the stimulus.'
       },
-      signal: {
+      trial_type: {
         type: jsPsych.plugins.parameterType.STRING,
         pretty_name: 'Stop or go trial',
         default: null,
@@ -92,8 +98,8 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
     var stop_time = null;
     var interval = null;  // interval time for checking for stop
     var tmp_RT = null;  // variable for storing old RT to check if changed
-    if (trial.signal == 'stop') {
-      stop_time = myrng() * (tSTOPmax - tSTOPmin) + tSTOPmin;
+    if (trial.trial_type == 'stop') {
+      stop_time = myrng() * (trial.time - 1 - trial.t_stop_min) + trial.t_stop_min;
     }
 
     var fix;
@@ -187,7 +193,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
 
       // gather the data to store for the trial
       var trial_data = {
-        "signal": trial.signal,
+        "trial_type": trial.trial_type,
         "count": trial.time,
         "stop_time": stop_time,
         "start_time": start_time,

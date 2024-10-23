@@ -68,7 +68,7 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
   let stop_prop = 0.4;
   let n_trials_per_block = 30;
   var n_blocks_exp = 6;
-  var n_secs = [6, 5, 4];
+  var n_secs = [5, 4, 3];
 
   let t_stop_min = 0.5 // minimum countdown time at which to stop
   let t_stop_max = 2.5   // maximum time at which to stop
@@ -185,7 +185,7 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
   var age = null;
   var sex = null;
   var fix_time = null;
-  var signal = null;
+  var trial_type = null;
   var count = null;
   var stop_time = null;
   var goRT = null;
@@ -420,7 +420,7 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
     on_finish: function(data) {
       var subjID = jsPsych.data.get().last(1).values()[0]['participantID'];
       data_row = "participantID,age,sex,block_i,trial_i,fix_time," +
-                 "signal,count,stop_time,goRT,RT,go_pos_x," +
+                 "trial_type,count,stop_time,goRT,RT,go_pos_x," +
                  "go_pos_y,go_times,stop_pos_x,stop_pos_y,stop_times,exclude," +
                  "focus,Fullscreen,browser_name,browser_version,os_name,os_version," +
                  "tablet,mobile,screen_resolution,window_resolution\n";
@@ -465,7 +465,7 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
   var write_cm_data = function() {    
       data_row = sub + ',' + age + ',' + sex + ',' + 
                block_ind + ',' + trial_ind + ',' + fix_time + ',' +
-               signal + ',' + count + ',' + stop_time + ',' +
+               trial_type + ',' + count + ',' + stop_time + ',' +
                goRT + ',' + RT + ',' +
                go_pos_x.join('\t') + ',' + go_pos_y.join('\t') + ',' +
                go_times.join('\t') + ',' + stop_pos_x.join('\t') + ',' +
@@ -496,7 +496,8 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
     type: 'custom-continuous-movement-plugin',
     fixation_duration: FIX,
     time: jsPsych.timelineVariable('time'),
-    signal: jsPsych.timelineVariable('signal'),
+    t_stop_min: t_stop_min,
+    trial_type: jsPsych.timelineVariable('trial_type'),
     trial_duration: MAXRT, // this is the max duration of waiting for the pariticipant to stop
     tone: tone_stim,
     feedback: function() { return block_ind == 0 },
@@ -508,7 +509,7 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
     },
     on_finish: function(data) {
       data.response = String(data.response); // convert explicitly to string so that "undefined" (no response) does not lead to empty cells in the datafile
-      signal = data.signal;
+      trial_type = data.trial_type;
       count = data.count;
       stop_time = data.stop_time;
       goRT = data.goRT;
@@ -523,7 +524,7 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
       trial_ind++;
 
       // block feedback
-      if (signal == 'go') {
+      if (trial_type == 'go') {
         n_go++;
       } else {
         n_stop++;
