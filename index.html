@@ -66,9 +66,9 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
   // ----- CUSTOMISE THE BASIC DESIGN -----
 
   let stop_prop = 0.4;
-  let n_trials_per_block = 40;
+  let n_trials_per_block = 30;
   var n_blocks_exp = 6;
-  var n_secs = [6, 5, 4, 3];
+  var n_secs = [6, 5, 4];
 
   let t_stop_min = 0.5 // minimum countdown time at which to stop
   let t_stop_max = 2.5   // maximum time at which to stop
@@ -232,12 +232,17 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
   var trial_types = Array.prototype.concat(
     Array(Math.ceil(n_trials_per_block / n_secs.length * (1 - stop_prop))).fill('go'),
     Array(Math.ceil(n_trials_per_block / n_secs.length * stop_prop)).fill('stop')
-  ).slice(1, Math.ceil(n_trials_per_block / n_secs.length));
+  );
 
   var design = jsPsych.randomization.factorial(
     {time : n_secs, trial_type: trial_types}, 1
   );
-  //console.log(design); // uncomment to print the design in the browser's console
+
+  if (design.length > n_trials_per_block) {
+    console.log('Cropping ' + (design.length - n_trials_per_block) +
+                ' trials from the end of the counterbalanced design');
+    design = design.slice(0, n_trials_per_block);
+  }
 
   /* #########################################################################
 
