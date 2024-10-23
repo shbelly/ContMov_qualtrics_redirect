@@ -437,6 +437,7 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
     trial_duration: ITI,
     on_start: function() {
       iti_start_t = performance.now();
+      trigger_write(40);
       setTimeout(write_cm_data, 20);  // ensure screen cleared first
     },
     on_finish: function() {
