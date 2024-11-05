@@ -67,6 +67,7 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
 
   let stop_prop = 0.4;
   let n_trials_per_block = 30;
+  let n_practice_trials = 13;
   var n_blocks_exp = 6;
   var n_secs = [5, 4, 3];
 
@@ -437,7 +438,6 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
     trial_duration: ITI,
     on_start: function() {
       iti_start_t = performance.now();
-      trigger_write(40);
       setTimeout(write_cm_data, 20);  // ensure screen cleared first
     },
     on_finish: function() {
@@ -553,7 +553,7 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
     type: 'html-keyboard-response',
     trial_duration: bFBT,
     choices: function() {
-      if (block_ind == NexpBL){
+      if (block_ind == n_blocks_exp){
         return ['p', 'space']
       } else {
         return ['p'] // 'p' can be used to skip the feedback, useful for debugging
@@ -561,7 +561,7 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
     },
 
     stimulus: function() {
-      if (block_ind == NexpBL){
+      if (block_ind == n_blocks_exp){
         var next_block_text = final_block_msg
       } else { // make a countdown timer
         var count = (bFBT / 1000);
@@ -610,7 +610,7 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
     type: 'call-function',
     func: function() {
       if (block_ind == 0) { // this limits the amount of trials in the practice block
-        if (trial_ind > n_trials_per_block) {
+        if (trial_ind > n_practice_trials) {
           jsPsych.endCurrentTimeline();
         }
       }
