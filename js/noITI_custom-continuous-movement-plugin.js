@@ -380,7 +380,6 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       counter += trial.trial_duration
       jsPsych.pluginAPI.setTimeout(function() {
         display_element.innerHTML = '';
-        trigger_write(16);
         end_trial();
       }, counter);
     }
