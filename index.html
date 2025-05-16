@@ -52,7 +52,7 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
   // ----- CUSTOMISE THE STIMULI AND RESPONSES -----
   // locate the stimuli that will be used in the experiment
   var pd = true;  // whether to add photodiode dark square in the corner during fixation
-  var fix_stim = 'images/fix.png';
+  var fix_stim = 'images/fix_pd.png';
   var circle_stim = 'images/circle.png';
   var go_stim = ['images/go_stim1.png', 'images/go_stim2.png', 'images/go_stim3.png',
                  'images/go_stim4.png', 'images/go_stim5.png', 'images/go_stim6.png',
@@ -421,11 +421,15 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
     on_finish: function(data) {
       var subjID = jsPsych.data.get().last(1).values()[0]['participantID'];
       data_row = "participantID,age,sex,block_i,trial_i,fix_time," +
-                 "trial_type,count,stop_time,goRT,RT,go_pos_x," +
+                 "trial_type,start_time,stop_signal_time,count,stop_time,goRT,RT,go_pos_x," +
                  "go_pos_y,go_times,stop_pos_x,stop_pos_y,stop_times,exclude," +
                  "focus,Fullscreen,browser_name,browser_version,os_name,os_version," +
                  "tablet,mobile,screen_resolution,window_resolution\n";
-      appendData('CM_data_'+ sub + '.csv', data_row);
+     if (online) {
+        appendData('CM_OHSU_data_'+ sub + '.csv', data_row);
+     } else {
+        appendDataOffline('CM_OHSU_data_'+ sub + '.csv', data_row);
+      }
     }
   };
 
@@ -464,19 +468,19 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
   };
 
   var write_cm_data = function() {    
-      data_row = sub + ',' + age + ',' + sex + ',' + 
-               block_ind + ',' + trial_ind + ',' + fix_time + ',' +
-               trial_type + ',' + count + ',' + stop_time + ',' +
-               goRT + ',' + RT + ',' +
-               go_pos_x.join('\t') + ',' + go_pos_y.join('\t') + ',' +
-               go_times.join('\t') + ',' + stop_pos_x.join('\t') + ',' +
-               stop_pos_y.join('\t') + ',' + stop_times.join('\t') + ',' +
-               exclude + ',' + focus + ',' + fullscr_ON + ',' +
-               bowser.name + ',' + bowser.version + ',' + bowser.osname + ',' +
-               bowser.os_version + ',' + String(bowser.tablet) + ',' +
-               String(bowser.mobile) + ',' +
-               screen.width + ' x ' + screen.height + ',' +
-               window.innerWidth + ' x ' + window.innerHeight + '\n'
+    data_row = sub + ',' + age + ',' + sex + ',' + 
+            block_ind + ',' + trial_ind + ',' + fix_time + ',' +
+            trial_type + ','+ start_time + ','+ stop_signal_time + ',' + count + ',' + stop_time + ',' +
+            goRT + ',' + RT + ',' +
+            go_pos_x.join('\t') + ',' + go_pos_y.join('\t') + ',' +
+            go_times.join('\t') + ',' + stop_pos_x.join('\t') + ',' +
+            stop_pos_y.join('\t') + ',' + stop_times.join('\t') + ',' +
+            exclude + ',' + focus + ',' + fullscr_ON + ',' +
+            bowser.name + ',' + bowser.version + ',' + bowser.osname + ',' +
+            bowser.os_version + ',' + String(bowser.tablet) + ',' +
+            String(bowser.mobile) + ',' +
+            screen.width + ' x ' + screen.height + ',' +
+            window.innerWidth + ' x ' + window.innerHeight + '\n';
     if (online){
       const size = 350;
       const num_chunks = Math.ceil(data_row.length / size);
@@ -699,6 +703,21 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
 
   // function that appends data to an existing file (or creates the file if it does not exist)
 
+  async function appendDataOffline(filename, filedata) {
+    fetch('save_data_append', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          filename: filename,
+          filedata: filedata
+        }),
+    })
+    .then(response => response.json())
+    .catch(error => console.error('Error:', error));
+  };
+  
   async function appendData(filename, filedata) {
     $.ajax({ // make sure jquery-1.7.1.min.js is loaded in the html header for this to work
       type: 'post',

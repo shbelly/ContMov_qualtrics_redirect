@@ -102,22 +102,28 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       stop_time = myrng() * (trial.time - 1 - trial.t_stop_min) + trial.t_stop_min;
     }
 
-    var fix;
-    
-    var fix = '<img src="' + fix_stim +
-              '"id="jspsych-image-keyboard-response-stimulus"></img>';
-    var stimuli = [];
-
+        var fix;
     if (pd) {
-      stimuli.push('<div class="container">' +
-              '<img src="' + start_stim +
+        // For the fixation stimulus, make the box white
+        fix = '<div class="container">' +
+              '<img src="' + fix_stim +
                 '"id="jspsych-image-keyboard-response-stimulus"></img>' +
-              '<div style="bottom:0px; right:0px; position:fixed; width:200px; ' +
-                   'height:200px; background-color: rgb(0, 0, 0);">pd</div>' +
-              '</div>');
+              '<div style="bottom:0px; right:0px; position:fixed; width:392px; ' +
+                   'height:200px; background-color: rgb(255, 255, 255);"></div>' +
+              '</div>';
+        
+        // For the start stimulus, use the black box
+        stimuli.push('<div class="container">' +
+                '<img src="' + start_stim +
+                  '"id="jspsych-image-keyboard-response-stimulus"></img>' +
+                '<div style="bottom:0px; right:0px; position:fixed; width:392px; ' +
+                     'height:200px; background-color: rgb(0, 0, 0);"></div>' +
+                '</div>');
     } else {
-      stimuli.push('<img src="' + start_stim +
-                   '"id="jspsych-image-keyboard-response-stimulus"></img>');
+        fix = '<img src="' + fix_stim +
+              '"id="jspsych-image-keyboard-response-stimulus"></img>';
+        stimuli.push('<img src="' + start_stim +
+                     '"id="jspsych-image-keyboard-response-stimulus"></img>');
     }
 
     // if shown stop at end of countdown
@@ -139,10 +145,10 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
     if (pd) {
       stop = '<div class="container">' +
              '<img src="' + stop_stim +
-               '"id="jspsych-image-keyboard-response-stimulus"></img>' +
-             '<div style="bottom:0px; right:0px; position:fixed; width:200px; ' +
-                          'height:200px; background-color: rgb(0, 0, 0);">pd</div>' +
-             '</div>';
+              '"id="jspsych-image-keyboard-response-stimulus"></img>' +
+              '<div style="bottom:0px; right:0px; position:fixed; width:392px; ' +
+                   'height:200px; background-color: rgb(255, 255, 255);"></div>' +
+              '</div>';
     } else {
       stop = '<img src="' + stop_stim +
              '"id="jspsych-image-keyboard-response-stimulus"></img>';
@@ -193,7 +199,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
 
       // gather the data to store for the trial
       var trial_data = {
-        "trial_type": trial.trial_type,
+        "trial_type_data": trial.trial_type,
         "count": trial.time,
         "stop_time": stop_time,
         "start_time": start_time,
@@ -380,7 +386,6 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       counter += trial.trial_duration
       jsPsych.pluginAPI.setTimeout(function() {
         display_element.innerHTML = '';
-        trigger_write(16);
         end_trial();
       }, counter);
     }

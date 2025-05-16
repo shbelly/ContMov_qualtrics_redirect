@@ -7,4 +7,3 @@ $data = $_POST['filedata'];
 // write the file to disk
 file_put_contents($filename, $data, FILE_APPEND);
 ?>
-
