@@ -1,0 +1,16 @@
+## on your terminal 
+ ~ % cd /your/path/to/the/saved/task/ContMov_OHSU_VS
+ContMov_OHSU_VS % python server.py
+
+##
+then you ope a Chrome incognito window and go to http://localhost:8000/index.html
+
+
+## you will see on your terminal
+======== Running on http://0.0.0.0:8000 ========
+(Press CTRL+C to quit)
+
+
+try to test a block of the task and see 
+1) if data are saved in a data folder (locally)
+2) if photodiode is behaving as expected and SEEG data are not showing too much artifacts
