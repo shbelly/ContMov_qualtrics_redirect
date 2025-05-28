@@ -1,12 +1,12 @@
 /**
  * custom-continuous-movement-plugin for jsPsych
- * by Alex Rockhill
+ * by Alex Rockhill + Sara Parmigiani
  *
  * based on:
  * jspsych-image-keyboard-response
  * by Josh de Leeuw
  *
- * plugin for displaying a countdown with a stop potentially interjected
+ * plugin for displaying a countdown with a stop, potentially interjected
  *
  *
  **/
@@ -102,7 +102,8 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       stop_time = myrng() * (trial.time - 1 - trial.t_stop_min) + trial.t_stop_min;
     }
 
-        var fix;
+    var fix;
+    var stimuli = [];
     if (pd) {
         // For the fixation stimulus, make the box white
         fix = '<div class="container">' +
@@ -125,8 +126,8 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         stimuli.push('<img src="' + start_stim +
                      '"id="jspsych-image-keyboard-response-stimulus"></img>');
     }
-
-    // if shown stop at end of countdown
+  
+         // if shown stop at end of countdown
     var my_stop_time = 1000; 
     for (i = trial.time; i > 0; i--) {
       if (stop_time == null || i > stop_time) {
@@ -146,14 +147,14 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       stop = '<div class="container">' +
              '<img src="' + stop_stim +
               '"id="jspsych-image-keyboard-response-stimulus"></img>' +
-              '<div style="bottom:0px; right:0px; position:fixed; width:392px; ' +
+               '<div style="bottom:0px; right:0px; position:fixed; width:392px; ' +
                    'height:200px; background-color: rgb(255, 255, 255);"></div>' +
-              '</div>';
+             '</div>';
     } else {
       stop = '<img src="' + stop_stim +
              '"id="jspsych-image-keyboard-response-stimulus"></img>';
     }
-
+    
     // add prompt
     if (trial.prompt !== null){
       stimuli[i] += trial.prompt;
@@ -343,11 +344,11 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
     }
 
     var number_times = [];
-    for (i = 0; i < (stimuli.length - 1); i++) {
-      if (stop_time == null || trial.time - i - 1 > stop_time) {
+    for (i = 1; i < stimuli.length; i++) {
+      if (stop_time == null || trial.time - i + 1 > stop_time) {
         counter += 1000;
-        let my_stimuli = stimuli[i + 1];
-        let stim_idx = trial.time - i;
+        let my_stimuli = stimuli[i];
+        let stim_idx = trial.time - i + 1;
         jsPsych.pluginAPI.setTimeout(function() {
           display_element.innerHTML = my_stimuli;
           trigger_write(stim_idx);
