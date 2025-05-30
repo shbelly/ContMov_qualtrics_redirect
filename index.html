@@ -9,6 +9,7 @@ Continuous Movement
 Modified from github.com/fredvburg/STOP-IT
 
 AUTHORS: Alex Rockhill (2020)
+Modifed by Sara Parmigiani (2025)
 
 DESCRIPTION: This is the jsPsych version of the continuous movement task
 
@@ -51,8 +52,8 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
 
   // ----- CUSTOMISE THE STIMULI AND RESPONSES -----
   // locate the stimuli that will be used in the experiment
-  var pd = true;  // whether to add photodiode dark square in the corner during fixation
-  var fix_stim = 'images/fix_pd.png';
+  var pd = true;  // whether to add photodiode dark square in the corner
+  var fix_stim = 'images/fix.png';
   var circle_stim = 'images/circle.png';
   var go_stim = ['images/go_stim1.png', 'images/go_stim2.png', 'images/go_stim3.png',
                  'images/go_stim4.png', 'images/go_stim5.png', 'images/go_stim6.png',
@@ -75,6 +76,42 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
   let t_stop_max = 2.5   // maximum time at which to stop
   //note: must be less than smallest n_secs value
 
+   // Create and manage persistent photodiode box
+  function createPhotodiodeBox() {
+    console.log('createPhotodiodeBox called, pd =', pd);
+    if (pd) {
+      var box = document.createElement('div');
+      box.id = 'photodiode-box';
+      box.style.cssText = 'position: fixed; bottom: 0px; right: 0px; width: 392px; height: 200px; background-color: rgb(0, 0, 0); z-index: 9999;';
+      box.textContent = 'pd';
+      document.body.appendChild(box);
+      console.log('Photodiode box created');
+    } else {
+      console.log('pd is false, box not created');
+    }
+  }
+
+  function hidePhotodiodeBox() {
+    console.log('hidePhotodiodeBox called');
+    var box = document.getElementById('photodiode-box');
+    if (box) {
+      box.style.display = 'none';
+      console.log('Box hidden');
+    } else {
+      console.log('Box not found when trying to hide');
+    }
+  }
+
+  function showPhotodiodeBox() {
+    console.log('showPhotodiodeBox called');
+    var box = document.getElementById('photodiode-box');
+    if (box) {
+      box.style.display = 'block';
+      console.log('Box shown');
+    } else {
+      console.log('Box not found when trying to show');
+    }
+  }
 
   // ----- CUSTOMISE THE TIME INTERVALS (in milliseconds)-----
 
@@ -188,6 +225,8 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
   var fix_time = null;
   var trial_type = null;
   var count = null;
+  var start_time = null;
+  var stop_signal_time = null;
   var stop_time = null;
   var goRT = null;
   var RT = null;
@@ -281,6 +320,17 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
     type: 'fullscreen',
     fullscreen_mode: false,
     button_label: label_next_button,
+  };
+  
+  
+  var create_photodiode = {
+    type: 'html-keyboard-response',
+    stimulus: '',
+    choices: jsPsych.NO_KEYS,
+    trial_duration: 1,
+    on_start: function() {
+    createPhotodiodeBox();
+    }
   };
 
   var trigger_connect = {
@@ -511,12 +561,13 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
     on_start: function(data) {  
       trigger_write(10);
       fix_time = performance.now();
+      start_time = performance.now(); // <- I've added this line!!!!
     },
     on_finish: function(data) {
       data.response = String(data.response); // convert explicitly to string so that "undefined" (no response) does not lead to empty cells in the datafile
       trial_type = data.trial_type;
       count = data.count;
-      stop_time = data.stop_time;
+      stop_signal_time = data.stop_signal_time;
       goRT = data.goRT;
       RT = data.RT;
       go_pos_x = data.go_pos_x;
@@ -659,6 +710,7 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
   if (fullscreen){
     start_timeline.push(fullscr);
   }
+  start_timeline.push(create_photodiode);
   start_timeline.push(instructions);
 
   // start the experiment with the previously defined start_timeline trials
@@ -703,36 +755,60 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
 
   // function that appends data to an existing file (or creates the file if it does not exist)
 
-  async function appendDataOffline(filename, filedata) {
-    fetch('save_data_append', {
+  async function appendData(filename, filedata) {
+    try {
+      console.log("Saving data to: " + filename);
+      const response = await fetch('/save_data_append', {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json',
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           filename: filename,
           filedata: filedata
         }),
-    })
-    .then(response => response.json())
-    .catch(error => console.error('Error:', error));
+      });
+    
+      if (!response.ok) {
+        throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
+      }
+    
+      const result = await response.json();
+      console.log("Data saved successfully:", result);
+      return result;
+    } catch (error) {
+      console.error("Error saving data:", error);
+    // You might want to implement a retry mechanism or notification here
+    }
   };
-  
   async function appendData(filename, filedata) {
-    $.ajax({ // make sure jquery-1.7.1.min.js is loaded in the html header for this to work
-      type: 'post',
-      cache: false,
-      async: false,  // don't append in the wrong order
-      url: 'php/save_data_append.php',
-      timeout: 2000,
-      data: {
-        filename: filename,
-        filedata: filedata
-      },
-    });
+    try {
+      console.log("Saving data to: " + filename);
+      const response = await fetch('/save_data_append', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          filename: filename,
+          filedata: filedata
+        }),
+      });
+    
+      if (!response.ok) {
+        throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
+      }
+    
+      const result = await response.json();
+      console.log("Data saved successfully:", result);
+      return result;
+    } catch (error) {
+      console.error("Error saving data:", error);
+    // You might want to implement a retry mechanism or notification here
+    }
   };
 
-  function save_offline_data() {   // https://gist.github.com/liabru/11263260
+ function save_offline_data() {   // https://gist.github.com/liabru/11263260
     var blob = new Blob([data_str], { type: 'text/plain;charset=utf-8' });
     anchor = document.createElement('a');
     anchor.download = 'CM_data_' + sub + '.csv';
@@ -746,6 +822,9 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
     timeline: timeline,
     preload_images: pre_load_stimuli,
     preload_audio: [tone_stim],
+    on_start: function() {
+    createPhotodiodeBox();  
+    },
     on_interaction_data_update: function(data) { //interaction data logs if participants leaves the browser window or exits full screen mode
       interaction = data.event;
       if (interaction.includes("fullscreen")){
