@@ -44,9 +44,112 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
   
   <link href="js/jsPsych/css/jspsych.css" rel="stylesheet" type="text/css"></link> <!-- standard jsPsych css stylesheet -->
 
+  <!-- Qualtrics Integration Script -->
+  <script>
+    // Function to check if we're running in Qualtrics
+    function isRunningInQualtrics() {
+      return typeof Qualtrics !== 'undefined' && Qualtrics.SurveyEngine;
+    }
+    
+    // Function to handle experiment completion in Qualtrics
+    function completeQualtricsExperiment() {
+      if (isRunningInQualtrics()) {
+        setTimeout(function() {
+          try {
+            Qualtrics.SurveyEngine.clickNextButton();
+          } catch (e) {
+            console.log('Could not automatically advance Qualtrics survey');
+          }
+        }, 2000);
+      }
+    }
+    
+    // Function to hide Qualtrics navigation buttons
+    function hideQualtricsButtons() {
+      try {
+        const nextButton = document.getElementById('NextButton');
+        if (nextButton) {
+          nextButton.style.display = 'none';
+          nextButton.style.visibility = 'hidden';
+        }
+        
+        const prevButton = document.getElementById('PreviousButton');
+        if (prevButton) {
+          prevButton.style.display = 'none';
+          prevButton.style.visibility = 'hidden';
+        }
+        
+        if (typeof $ !== 'undefined') {
+          $('#NextButton').hide();
+          $('#PreviousButton').hide();
+          $('input[type="submit"][value="Next"]').hide();
+          $('input[value=">>"]').hide();
+        }
+        
+        console.log('Qualtrics buttons hidden');
+      } catch (e) {
+        console.log('Error hiding buttons:', e);
+      }
+    }
+    
+    // Function to show Qualtrics navigation buttons
+    function showQualtricsButtons() {
+      try {
+        const nextButton = document.getElementById('NextButton');
+        if (nextButton) {
+          nextButton.style.display = '';
+          nextButton.style.visibility = 'visible';
+        }
+        
+        const prevButton = document.getElementById('PreviousButton');
+        if (prevButton) {
+          prevButton.style.display = '';
+          prevButton.style.visibility = 'visible';
+        }
+        
+        if (typeof $ !== 'undefined') {
+          $('#NextButton').show();
+          $('#PreviousButton').show();
+          $('input[type="submit"][value="Next"]').show();
+          $('input[value=">>"]').show();
+        }
+        
+        console.log('Qualtrics buttons shown');
+      } catch (e) {
+        console.log('Error showing buttons:', e);
+      }
+    }
+    
+    window.addEventListener('load', function() {
+      if (isRunningInQualtrics()) {
+        console.log('CM experiment loaded in Qualtrics environment');
+        hideQualtricsButtons();
+      }
+    });
+    
+    // Global function to be called when experiment completes
+    window.onCMComplete = function() {
+      console.log('CM experiment completed');
+      if (isRunningInQualtrics()) {
+        showQualtricsButtons();
+        completeQualtricsExperiment();
+      }
+    };
+  </script>
+
 </head>
 
-<body></body>
+<body>
+  <div id="qualtrics-status" style="display: none; position: fixed; top: 0; left: 0; background: #007ACC; color: white; padding: 5px 10px; font-size: 12px; z-index: 10000;">
+    Running in Qualtrics
+  </div>
+  
+  <script>
+    if (typeof Qualtrics !== 'undefined') {
+      document.getElementById('qualtrics-status').style.display = 'block';
+    }
+  </script>
+</body>
 
 <script>
 
@@ -460,6 +563,93 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
     }
   };
 
+  // Add Qualtrics data sending function
+  function sendDataToQualtrics() {
+    try {
+      console.log("=== CM EXPERIMENT DATA ===");
+      
+      // Calculate summary statistics from collected data
+      const allData = jsPsych.data.get().values();
+      const trialData = allData.filter(trial => trial.trial_type && (trial.trial_type === 'go' || trial.trial_type === 'stop'));
+      
+      const totalTrials = trialData.length;
+      const goTrials = trialData.filter(t => t.trial_type === 'go');
+      const stopTrials = trialData.filter(t => t.trial_type === 'stop');
+      
+      // Calculate averages and performance metrics
+      const avgGoRT = goTrials.length > 0 ? 
+        goTrials.filter(t => t.goRT).reduce((sum, t) => sum + t.goRT, 0) / goTrials.filter(t => t.goRT).length : 0;
+      
+      const avgStopRT = stopTrials.length > 0 ? 
+        stopTrials.filter(t => t.RT).reduce((sum, t) => sum + t.RT, 0) / stopTrials.filter(t => t.RT).length : 0;
+      
+      const excludedTrials = trialData.filter(t => t.exclude && t.exclude !== '').length;
+      const accuracyRate = totalTrials > 0 ? ((totalTrials - excludedTrials) / totalTrials) * 100 : 0;
+      
+      const cmData = {
+        cm_subject_id: sub || 'unknown',
+        cm_age: age || 'unknown',
+        cm_sex: sex || 'unknown',
+        cm_total_trials: totalTrials,
+        cm_go_trials: goTrials.length,
+        cm_stop_trials: stopTrials.length,
+        cm_avg_go_rt: Math.round(avgGoRT),
+        cm_avg_stop_rt: Math.round(avgStopRT),
+        cm_excluded_trials: excludedTrials,
+        cm_accuracy_rate: parseFloat(accuracyRate.toFixed(2)),
+        cm_blocks_completed: block_ind
+      };
+
+      console.log("Data to send:", cmData);
+
+      // Method 1: Direct Qualtrics API
+      if (typeof Qualtrics !== 'undefined' && Qualtrics.SurveyEngine) {
+        console.log("Method 1: Direct Qualtrics API");
+        Object.keys(cmData).forEach(key => {
+          Qualtrics.SurveyEngine.setEmbeddedData(key, cmData[key]);
+          console.log(`Set ${key}: ${cmData[key]}`);
+        });
+      }
+
+      // Method 2: PostMessage to parent
+      try {
+        window.parent.postMessage({
+          type: 'SET_QUALTRICS_EMBEDDED_DATA',
+          data: cmData
+        }, '*');
+        console.log("PostMessage sent to parent");
+      } catch (e) {
+        console.log("PostMessage failed:", e);
+      }
+
+      // Method 3: Parent Qualtrics access
+      try {
+        if (window.parent?.Qualtrics?.SurveyEngine) {
+          console.log("Method 3: Parent Qualtrics API");
+          Object.keys(cmData).forEach(key => {
+            window.parent.Qualtrics.SurveyEngine.setEmbeddedData(key, cmData[key]);
+          });
+        }
+      } catch (e) {
+        console.log("Parent Qualtrics access failed:", e);
+      }
+
+      // Method 4: Store in window
+      try {
+        window.cmExperimentResults = cmData;
+        window.parent.cmExperimentResults = cmData;
+        console.log("Method 4: Stored in window objects");
+      } catch (e) {
+        console.log("Window storage failed:", e);
+      }
+
+      console.log("=== ALL CM DATA METHODS ATTEMPTED ===");
+
+    } catch (error) {
+      console.error("Qualtrics data transfer error:", error);
+    }
+  }
+
   // instruction trial
   // the instructions are declared in the configuration/text_variables.js file
   var instructions = {
@@ -680,6 +870,21 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
       if (!online) {
         save_offline_data();
       }
+      // Send data to Qualtrics when experiment ends
+      sendDataToQualtrics();
+    },
+    on_finish: function() {
+      // Send completion signal to parent (Qualtrics) - separate from data transfer
+      try {
+        window.parent.postMessage({type: 'CM_COMPLETE'}, '*');
+        console.log("CM_COMPLETE message sent to parent");
+      } catch (e) {
+        console.log("Failed to send CM completion message:", e);
+      }
+      
+      if (typeof window.onCMComplete === 'function') {
+        window.onCMComplete();
+      }
     }
   };
 
@@ -781,32 +986,6 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
     // You might want to implement a retry mechanism or notification here
     }
   };
-  async function appendData(filename, filedata) {
-    try {
-      console.log("Saving data to: " + filename);
-      const response = await fetch('/save_data_append', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          filename: filename,
-          filedata: filedata
-        }),
-      });
-    
-      if (!response.ok) {
-        throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
-      }
-    
-      const result = await response.json();
-      console.log("Data saved successfully:", result);
-      return result;
-    } catch (error) {
-      console.error("Error saving data:", error);
-    // You might want to implement a retry mechanism or notification here
-    }
-  };
 
  function save_offline_data() {   // https://gist.github.com/liabru/11263260
     var blob = new Blob([data_str], { type: 'text/plain;charset=utf-8' });
@@ -841,8 +1020,23 @@ DESCRIPTION: This is the jsPsych version of the continuous movement task
       min_height: minHeight
     },
     on_finish: function() {
-      if (redirect_onCompletion){
-        setTimeout("location.href = '" + redirect_link + "';", redirect_timeout); // redirect to another URL with a certain delay, only when redirect_onCompletion is set to 'true'
+      // Send data to Qualtrics when jsPsych finishes
+      sendDataToQualtrics();
+      
+      // Send completion signal to parent (Qualtrics)
+      try {
+        window.parent.postMessage({type: 'CM_COMPLETE'}, '*');
+        console.log("CM_COMPLETE message sent to parent from jsPsych finish");
+      } catch (e) {
+        console.log("Failed to send CM completion message from jsPsych finish:", e);
+      }
+      
+      if (typeof window.onCMComplete === 'function') {
+        window.onCMComplete();
+      }
+      
+      if (redirect_onCompletion && !isRunningInQualtrics()){
+        setTimeout("location.href = '" + redirect_link + "';", redirect_timeout); // redirect to another URL with a certain delay, only when redirect_onCompletion is set to 'true' and not in Qualtrics
       }
     },
   })
