@@ -196,7 +196,7 @@
                        'images/go_stim10.png'];
         var start_stim = 'images/start.png';
         var stop_stim = 'images/stop.png';
-        var tone_stim = 'audio/tone.mp3';
+        var tone_stim = null; // Disable audio for now
 
         // Experiment design
         let stop_prop = 0.4;
@@ -686,7 +686,7 @@
         jsPsych.init({
             timeline: timeline,
             preload_images: pre_load_stimuli,
-            preload_audio: [tone_stim],
+            // preload_audio: [tone_stim], // Disable audio preload for now
             on_start: function() {
                 createPhotodiodeBox();
                 console.log('jsPsych experiment started');
@@ -732,9 +732,6 @@
                 }
             }
         });
-    </script>
-</body>
-</html>
     </script>
 </body>
 </html>
