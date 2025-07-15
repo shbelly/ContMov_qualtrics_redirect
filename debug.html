@@ -30,21 +30,43 @@
         
         var test_space = {
             type: 'html-keyboard-response',
-            stimulus: '<p>Press SPACEBAR to test keyboard input</p>',
-            choices: ['space'],
+            stimulus: '<div style="text-align: center; padding: 50px;"><p style="font-size: 24px;">Press SPACEBAR to test keyboard input</p><p style="font-size: 16px; color: #666;">If spacebar doesn\'t work, <strong>click anywhere on this screen first</strong>, then try spacebar</p><p style="font-size: 14px; color: #999;">Or try pressing any other key to test</p></div>',
+            choices: jsPsych.ALL_KEYS, // Accept any key for testing
             on_start: function() {
-                console.log('Waiting for spacebar...');
+                console.log('Waiting for keyboard input...');
+                
+                // Force focus on the document
+                setTimeout(() => {
+                    document.body.focus();
+                    document.body.tabIndex = -1;
+                    document.body.click();
+                    console.log('Attempted to focus document');
+                }, 100);
+                
+                // Add click listener to help with focus
+                document.addEventListener('click', function() {
+                    console.log('Document clicked - should help with focus');
+                    document.body.focus();
+                });
             },
-            on_finish: function() {
-                console.log('Spacebar detected!');
+            on_finish: function(data) {
+                console.log('Key detected! Key pressed:', data.response);
+                if (data.response === 'space') {
+                    console.log('SUCCESS: Spacebar works!');
+                } else {
+                    console.log('Different key pressed:', data.response);
+                }
             }
         };
         
         var test_complete = {
             type: 'html-keyboard-response',
-            stimulus: '<p>Success! Keyboard input works.</p>',
+            stimulus: function() {
+                var lastKey = jsPsych.data.get().last(1).values()[0].response;
+                return '<p>Success! You pressed: <strong>' + lastKey + '</strong></p><p>The keyboard input system is working.</p>';
+            },
             choices: jsPsych.NO_KEYS,
-            trial_duration: 2000
+            trial_duration: 3000
         };
         
         timeline.push(welcome, test_space, test_complete);
@@ -57,6 +79,10 @@
             on_finish: function() {
                 console.log('Test complete!');
             }
+        });
+    </script>
+</body>
+</html>
         });
     </script>
 </body>
