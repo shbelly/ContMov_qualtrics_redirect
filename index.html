@@ -186,7 +186,7 @@
         let final_block_msg = "<p>Press space to continue...</p>";
 
         var welcome_message = ['<p>Welcome to the experiment.</p><p>Press "Next" to begin.</p>'];
-        var text_at_start_block = '<p>Press space to begin.</p>';
+        var text_at_start_block = '<p>Press the <strong>spacebar</strong> to begin.</p><p style="font-size: 14px; color: #666;">(Make sure to click on this screen first if the spacebar doesn\'t work)</p>';
         var get_ready_message = '<p>Get ready...</p>';
         var end_message = "<p>Thank you for your participation.</p><p>Press space to finalize the experiment.</p>";
 
@@ -321,7 +321,20 @@
         var block_start = {
             type: 'html-keyboard-response',
             stimulus: text_at_start_block,
-            choices: ['space']
+            choices: ['space'],
+            on_start: function() {
+                console.log('Block start screen displayed - waiting for spacebar');
+                // Ensure the page has focus
+                setTimeout(() => {
+                    if (document.body) {
+                        document.body.focus();
+                        document.body.click();
+                    }
+                }, 100);
+            },
+            on_finish: function() {
+                console.log('Spacebar pressed, continuing to next phase');
+            }
         };
 
         var block_get_ready = {
@@ -586,7 +599,16 @@
             preload_images: pre_load_stimuli,
             preload_audio: [tone_stim],
             on_start: function() {
-                createPhotodiodeBox();  
+                createPhotodiodeBox();
+                console.log('jsPsych experiment started');
+                
+                // Ensure the document has focus for keyboard events
+                setTimeout(() => {
+                    if (document.body) {
+                        document.body.focus();
+                        document.body.tabIndex = -1; // Make it focusable
+                    }
+                }, 500);
             },
             on_interaction_data_update: function(data) {
                 var interaction = data.event;
