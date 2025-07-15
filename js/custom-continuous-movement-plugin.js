@@ -81,18 +81,40 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
   }
 
   plugin.trial = function(display_element, trial) {
-    // setup audio
+    // setup audio with error handling
+    var source = null;
+    var audio = null;
     if(trial.tone !== null) {
-      var context = jsPsych.pluginAPI.audioContext();
-      if(context !== null){
-        var source = context.createBufferSource();
-        source.buffer = jsPsych.pluginAPI.getAudioBuffer(trial.tone);
-        source.connect(context.destination);
-      } else {
-        var audio = jsPsych.pluginAPI.getAudioBuffer(trial.tone);
-        audio.currentTime = 0;
+      try {
+        var context = jsPsych.pluginAPI.audioContext();
+        if(context !== null){
+          source = context.createBufferSource();
+          var audioBuffer = jsPsych.pluginAPI.getAudioBuffer(trial.tone);
+          if (audioBuffer && audioBuffer instanceof AudioBuffer) {
+            source.buffer = audioBuffer;
+            source.connect(context.destination);
+            console.log('Audio buffer loaded successfully');
+          } else {
+            console.warn('Audio buffer not valid, continuing without audio');
+            source = null;
+          }
+        } else {
+          audio = jsPsych.pluginAPI.getAudioBuffer(trial.tone);
+          if (audio && typeof audio.play === 'function') {
+            audio.currentTime = 0;
+            console.log('Audio element loaded successfully');
+          } else {
+            console.warn('Audio element not valid, continuing without audio');
+            audio = null;
+          }
+        }
+      } catch (e) {
+        console.warn('Audio setup failed:', e, 'continuing without audio');
+        source = null;
+        audio = null;
       }
     }
+    
     var stop_time = null;
     var interval = null;  // interval time for checking for stop
     var tmp_RT = null;  // variable for storing old RT to check if changed
@@ -152,14 +174,17 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
 
     // function to end trial when it is time
     var end_trial = function() {
-      // stop the audio file if it is playing
-      // remove end event listeners if they exist
+      // stop the audio file if it is playing with error handling
       if(trial.tone !== null) {
-        if(context !== null){
-          source.stop();
-          source.onended = function() { }
-        } else {
-          audio.pause();
+        try {
+          if(context !== null && source){
+            source.stop();
+            source.onended = function() { }
+          } else if (audio) {
+            audio.pause();
+          }
+        } catch (e) {
+          console.warn('Audio stop failed:', e);
         }
       }
 
@@ -284,7 +309,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         // give feedback
         if (trial.feedback) {
           display_element.innerHTML = '<p style="font-size: 44px;">' +
-            (response.exclude == 'no' ? correct_msg : response.exclude) + '<\p>';
+            (response.exclude == 'no' ? correct_msg : response.exclude) + '</p>';
           if (trial.trial_duration !== null) {
             jsPsych.pluginAPI.setTimeout(function() {
               display_element.innerHTML = '';
@@ -337,12 +362,16 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         display_element.innerHTML = stop;
         trigger_write(stop_time == null ? 13 : 14);
         stop_signal_time = performance.now();
-        // start audio
+        // start audio with error handling
         if(trial.tone !== null) {
-          if(context !== null){
-            source.start(context.currentTime);
-          } else {
-            audio.play();
+          try {
+            if(context !== null && source){
+              source.start(context.currentTime);
+            } else if (audio) {
+              audio.play();
+            }
+          } catch (e) {
+            console.warn('Audio playback failed:', e);
           }
         }
         go = false;
