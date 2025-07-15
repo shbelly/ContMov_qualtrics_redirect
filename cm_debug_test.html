@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CM Debug Test</title>
+    <script src="js/jsPsych/jspsych.js"></script>
+    <script src="js/jsPsych/plugins/jspsych-instructions.js"></script>
+    <script src="js/jsPsych/plugins/jspsych-html-keyboard-response.js"></script>
+    <link href="js/jsPsych/css/jspsych.css" rel="stylesheet" type="text/css">
+</head>
+<body>
+    <script>
+        console.log('=== DEBUG TEST START ===');
+        
+        // Test if jsPsych loads
+        if (typeof jsPsych === 'undefined') {
+            console.error('jsPsych not loaded!');
+            document.body.innerHTML = '<h1>Error: jsPsych not loaded</h1><p>Check if js/jsPsych/jspsych.js exists</p>';
+        } else {
+            console.log('jsPsych loaded successfully');
+        }
+        
+        var timeline = [];
+        
+        var welcome = {
+            type: "instructions",
+            pages: ['<p>Debug test - if you see this, basic jsPsych is working</p>'],
+            show_clickable_nav: true,
+            button_label_next: "Next"
+        };
+        
+        var test_space = {
+            type: 'html-keyboard-response',
+            stimulus: '<p>Press SPACEBAR to test keyboard input</p>',
+            choices: ['space'],
+            on_start: function() {
+                console.log('Waiting for spacebar...');
+            },
+            on_finish: function() {
+                console.log('Spacebar detected!');
+            }
+        };
+        
+        var test_complete = {
+            type: 'html-keyboard-response',
+            stimulus: '<p>Success! Keyboard input works.</p>',
+            choices: jsPsych.NO_KEYS,
+            trial_duration: 2000
+        };
+        
+        timeline.push(welcome, test_space, test_complete);
+        
+        jsPsych.init({
+            timeline: timeline,
+            on_start: function() {
+                console.log('jsPsych init started');
+            },
+            on_finish: function() {
+                console.log('Test complete!');
+            }
+        });
+    </script>
+</body>
+</html>
