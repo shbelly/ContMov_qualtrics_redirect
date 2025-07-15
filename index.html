@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html>
 <head>
@@ -742,14 +743,6 @@
                 
                 if (typeof window.onCMComplete === 'function') {
                     window.onCMComplete();
-                }
-            },
-            on_trial_start: function() {
-                console.log('Trial started - type:', jsPsych.current_trial());
-            },
-            on_trial_finish: function(data) {
-                if (data.trial_type && data.trial_type_data) {
-                    console.log('Trial finished:', data.trial_type_data, 'RT:', data.RT);
                 }
             }
         });
