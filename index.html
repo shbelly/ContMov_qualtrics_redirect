@@ -320,17 +320,25 @@
 
         var block_start = {
             type: 'html-keyboard-response',
-            stimulus: text_at_start_block,
+            stimulus: '<div style="text-align: center; padding: 50px;"><p style="font-size: 24px;">Press the <strong>spacebar</strong> to begin.</p><p style="font-size: 16px; color: #666;">If spacebar doesn\'t work, <strong>click anywhere on this screen first</strong>, then press spacebar</p></div>',
             choices: ['space'],
             on_start: function() {
                 console.log('Block start screen displayed - waiting for spacebar');
-                // Ensure the page has focus
+                
+                // Force focus and add click handler
                 setTimeout(() => {
-                    if (document.body) {
-                        document.body.focus();
-                        document.body.click();
-                    }
+                    document.body.focus();
+                    document.body.tabIndex = -1;
+                    console.log('Applied focus to document');
                 }, 100);
+                
+                // Add click listener to help with focus
+                var clickHandler = function() {
+                    console.log('Document clicked - keyboard should work now');
+                    document.body.focus();
+                    document.removeEventListener('click', clickHandler); // Remove after first click
+                };
+                document.addEventListener('click', clickHandler);
             },
             on_finish: function() {
                 console.log('Spacebar pressed, continuing to next phase');
@@ -604,11 +612,15 @@
                 
                 // Ensure the document has focus for keyboard events
                 setTimeout(() => {
-                    if (document.body) {
-                        document.body.focus();
-                        document.body.tabIndex = -1; // Make it focusable
-                    }
+                    document.body.focus();
+                    document.body.tabIndex = -1; // Make it focusable
+                    console.log('Document focus applied');
                 }, 500);
+                
+                // Global click handler to maintain focus
+                document.addEventListener('click', function() {
+                    document.body.focus();
+                });
             },
             on_interaction_data_update: function(data) {
                 var interaction = data.event;
