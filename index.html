@@ -196,7 +196,7 @@
                        'images/go_stim10.png'];
         var start_stim = 'images/start.png';
         var stop_stim = 'images/stop.png';
-        var tone_stim = null; // Disable audio for now
+        var tone_stim = 'audio/tone.mp3'; // Re-enable audio
 
         // Experiment design
         let stop_prop = 0.4;
@@ -440,7 +440,7 @@
             t_stop_min: t_stop_min,
             trial_type: jsPsych.timelineVariable('trial_type'),
             trial_duration: MAXRT,
-            tone: tone_stim,
+            tone: tone_stim, // Re-enable audio
             feedback: function() { return block_ind == 0 },
             feedback_duration: iFBT,
             iti: ITI,
@@ -686,10 +686,22 @@
         jsPsych.init({
             timeline: timeline,
             preload_images: pre_load_stimuli,
-            // preload_audio: [tone_stim], // Disable audio preload for now
+            preload_audio: [tone_stim],
             on_start: function() {
                 createPhotodiodeBox();
                 console.log('jsPsych experiment started');
+                
+                // Test if audio loaded properly
+                try {
+                    var audioBuffer = jsPsych.pluginAPI.getAudioBuffer(tone_stim);
+                    if (audioBuffer) {
+                        console.log('✅ Audio file loaded successfully');
+                    } else {
+                        console.warn('⚠️ Audio file not loaded, but continuing anyway');
+                    }
+                } catch (e) {
+                    console.warn('⚠️ Audio test failed:', e);
+                }
                 
                 // Ensure the document has focus for keyboard events
                 setTimeout(() => {
@@ -718,6 +730,7 @@
                 min_height: minHeight
             },
             on_finish: function() {
+                console.log('=== EXPERIMENT COMPLETED ===');
                 sendDataToQualtrics();
                 
                 try {
@@ -729,6 +742,14 @@
                 
                 if (typeof window.onCMComplete === 'function') {
                     window.onCMComplete();
+                }
+            },
+            on_trial_start: function() {
+                console.log('Trial started - type:', jsPsych.current_trial());
+            },
+            on_trial_finish: function(data) {
+                if (data.trial_type && data.trial_type_data) {
+                    console.log('Trial finished:', data.trial_type_data, 'RT:', data.RT);
                 }
             }
         });
