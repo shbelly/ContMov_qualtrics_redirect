@@ -16,6 +16,53 @@
     <script src="js/bowser.js"></script>
     <script src="js/sprintf.js"></script>
     <script src="js/rng.js"></script>
+    <script>
+        // Test all dependencies first
+        console.log('=== DEPENDENCY CHECK ===');
+        
+        // Check jsPsych
+        if (typeof jsPsych === 'undefined') {
+            console.error('❌ jsPsych not loaded');
+            document.body.innerHTML = '<h1>Error: jsPsych not loaded</h1>';
+        } else {
+            console.log('✅ jsPsych loaded');
+        }
+        
+        // Check plugins
+        if (typeof jsPsych.plugins === 'undefined' || !jsPsych.plugins['html-keyboard-response']) {
+            console.error('❌ html-keyboard-response plugin not loaded');
+        } else {
+            console.log('✅ html-keyboard-response plugin loaded');
+        }
+        
+        // Check other dependencies
+        if (typeof $ === 'undefined') {
+            console.warn('⚠️ jQuery not loaded (may cause issues)');
+        } else {
+            console.log('✅ jQuery loaded');
+        }
+        
+        if (typeof bowser === 'undefined') {
+            console.warn('⚠️ Bowser not loaded (may cause issues)');
+        } else {
+            console.log('✅ Bowser loaded');
+        }
+        
+        if (typeof sprintf === 'undefined') {
+            console.warn('⚠️ sprintf not loaded (may cause issues)');
+        } else {
+            console.log('✅ sprintf loaded');
+        }
+        
+        if (typeof myrng === 'undefined') {
+            console.warn('⚠️ rng not loaded (may cause issues)');
+        } else {
+            console.log('✅ rng loaded');
+        }
+        
+        console.log('=== END DEPENDENCY CHECK ===');
+    </script>
+
     <script>var myrng = new Math.seedrandom('continuous-movement_seed');</script>
     <script src="js/custom-continuous-movement-plugin.js"></script>
     
@@ -114,6 +161,30 @@
     </script>
 
     <script>
+        // ===== SIMPLE TEST FIRST =====
+        console.log('Starting simple keyboard test...');
+        
+        // Add a simple test before the main experiment
+        var simple_test = {
+            type: 'html-keyboard-response',
+            stimulus: '<div style="background: #f0f0f0; padding: 50px; text-align: center;"><h2>SIMPLE TEST</h2><p>Press ANY key to continue</p><p style="color: #666;">This tests basic keyboard detection</p></div>',
+            choices: jsPsych.ALL_KEYS,
+            on_start: function() {
+                console.log('=== SIMPLE TEST START ===');
+                document.body.focus();
+                document.body.tabIndex = -1;
+                
+                // Raw event listener
+                document.addEventListener('keydown', function(e) {
+                    console.log('Raw key event:', e.key, e.code);
+                });
+            },
+            on_finish: function(data) {
+                console.log('=== SIMPLE TEST SUCCESS ===');
+                console.log('Detected key:', data.response);
+            }
+        };
+
         // ===== TASK CONFIGURATION =====
         var pd = false;  // Disable photodiode for online use
         
@@ -320,10 +391,11 @@
 
         var block_start = {
             type: 'html-keyboard-response',
-            stimulus: '<div style="text-align: center; padding: 50px;"><p style="font-size: 24px;">Press the <strong>spacebar</strong> to begin.</p><p style="font-size: 16px; color: #666;">If spacebar doesn\'t work, <strong>click anywhere on this screen first</strong>, then press spacebar</p></div>',
-            choices: ['space'],
+            stimulus: '<div style="text-align: center; padding: 50px;"><p style="font-size: 24px;">Press the <strong>spacebar</strong> to begin.</p><p style="font-size: 16px; color: #666;">If spacebar doesn\'t work, <strong>click anywhere on this screen first</strong>, then press spacebar</p><p style="font-size: 14px; color: #999;">You can also try pressing any other key</p></div>',
+            choices: jsPsych.ALL_KEYS, // Accept any key, not just space
             on_start: function() {
-                console.log('Block start screen displayed - waiting for spacebar');
+                console.log('=== BLOCK START SCREEN ===');
+                console.log('Waiting for ANY keyboard input...');
                 
                 // Force focus and add click handler
                 setTimeout(() => {
@@ -336,12 +408,21 @@
                 var clickHandler = function() {
                     console.log('Document clicked - keyboard should work now');
                     document.body.focus();
-                    document.removeEventListener('click', clickHandler); // Remove after first click
+                    document.removeEventListener('click', clickHandler);
                 };
                 document.addEventListener('click', clickHandler);
+                
+                // Add direct keydown listener for debugging
+                var keyHandler = function(e) {
+                    console.log('Raw keydown detected:', e.key, e.code, e.which);
+                    document.removeEventListener('keydown', keyHandler);
+                };
+                document.addEventListener('keydown', keyHandler);
             },
-            on_finish: function() {
-                console.log('Spacebar pressed, continuing to next phase');
+            on_finish: function(data) {
+                console.log('=== KEY DETECTED ===');
+                console.log('Key pressed:', data.response);
+                console.log('Moving to next trial...');
             }
         };
 
@@ -576,7 +657,7 @@
         };
 
         // ===== BUILD TIMELINE =====
-        var start_timeline = [welcome, skip_triggers, instructions];
+        var start_timeline = [simple_test, welcome, skip_triggers, instructions];
 
         var start_procedure = {
             timeline: start_timeline,
@@ -651,6 +732,9 @@
                 }
             }
         });
+    </script>
+</body>
+</html>
     </script>
 </body>
 </html>
