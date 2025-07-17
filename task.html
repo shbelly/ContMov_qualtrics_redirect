@@ -1,0 +1,1177 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Continuous Movement Task</title>
+    
+    <!-- jsPsych Library -->
+    <script src="js/jsPsych/jspsych.js"></script>
+    <script src="js/jsPsych/plugins/jspsych-instructions.js"></script>
+    <script src="js/jsPsych/plugins/jspsych-html-keyboard-response.js"></script>
+    <script src="js/jsPsych/plugins/jspsych-call-function.js"></script>
+    <script src="js/jsPsych/plugins/jspsych-fullscreen.js"></script>
+    <link href="js/jsPsych/css/jspsych.css" rel="stylesheet" type="text/css">
+    
+    <!-- Other Required Libraries -->
+    <script src="js/jquery-3.6.0.min.js"></script>
+    <script src="js/bowser.js"></script>
+    <script src="js/sprintf.js"></script>
+    <script src="js/rng.js"></script>
+    <script>
+        // Test all dependencies first
+        console.log('=== DEPENDENCY CHECK ===');
+        
+        // Check jsPsych
+        if (typeof jsPsych === 'undefined') {
+            console.error('❌ jsPsych not loaded');
+            document.body.innerHTML = '<h1>Error: jsPsych not loaded</h1>';
+        } else {
+            console.log('✅ jsPsych loaded');
+        }
+        
+        // Check plugins
+        if (typeof jsPsych.plugins === 'undefined' || !jsPsych.plugins['html-keyboard-response']) {
+            console.error('❌ html-keyboard-response plugin not loaded');
+        } else {
+            console.log('✅ html-keyboard-response plugin loaded');
+        }
+        
+        // Check other dependencies
+        if (typeof $ === 'undefined') {
+            console.warn('⚠️ jQuery not loaded (may cause issues)');
+        } else {
+            console.log('✅ jQuery loaded');
+        }
+        
+        if (typeof bowser === 'undefined') {
+            console.warn('⚠️ Bowser not loaded (may cause issues)');
+        } else {
+            console.log('✅ Bowser loaded');
+        }
+        
+        if (typeof sprintf === 'undefined') {
+            console.warn('⚠️ sprintf not loaded (may cause issues)');
+        } else {
+            console.log('✅ sprintf loaded');
+        }
+        
+        if (typeof myrng === 'undefined') {
+            console.warn('⚠️ rng not loaded (may cause issues)');
+        } else {
+            console.log('✅ rng loaded');
+        }
+        
+        console.log('=== END DEPENDENCY CHECK ===');
+    </script>
+
+    <script>var myrng = new Math.seedrandom('continuous-movement_seed');</script>
+    <script src="js/custom-continuous-movement-plugin.js"></script>
+    
+    <!-- Window Size Monitoring -->
+    <script>
+        // Window size requirements
+        const MIN_WIDTH = 800;
+        const MIN_HEIGHT = 600;
+        
+        // Create warning overlay
+        function createSizeWarning() {
+            const warningDiv = document.createElement('div');
+            warningDiv.id = 'size-warning-overlay';
+            warningDiv.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.9);
+                color: white;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                z-index: 99999;
+                font-family: Arial, sans-serif;
+                text-align: center;
+                padding: 20px;
+                box-sizing: border-box;
+            `;
+            
+            warningDiv.innerHTML = `
+                <div style="max-width: 600px;">
+                    <h2 style="color: #ff6b6b; margin-bottom: 20px;">⚠️ Window Too Small</h2>
+                    <p style="font-size: 18px; margin-bottom: 15px;">
+                        Please expand your browser window to continue with the experiment.
+                    </p>
+                    <p style="font-size: 16px; margin-bottom: 20px;">
+                        <strong>Required:</strong> At least ${MIN_WIDTH} × ${MIN_HEIGHT} pixels<br>
+                        <strong>Current:</strong> <span id="current-size">${window.innerWidth} × ${window.innerHeight}</span> pixels
+                    </p>
+                    <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; margin: 20px 0;">
+                        <p style="margin: 0; font-size: 14px;">
+                            💡 <strong>Tips:</strong><br>
+                            • Press F11 for fullscreen mode<br>
+                            • Maximize your browser window<br>
+                            • Close other windows/tabs to free up space<br>
+                            • The page will automatically refresh when requirements are met
+                        </p>
+                    </div>
+                    <p style="font-size: 14px; color: #ccc;">
+                        This ensures the best experience for the experiment.
+                    </p>
+                </div>
+            `;
+            
+            document.body.appendChild(warningDiv);
+            return warningDiv;
+        }
+        
+        // Check window size and show/hide warning
+        function checkWindowSize() {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            const meetsRequirements = width >= MIN_WIDTH && height >= MIN_HEIGHT;
+            
+            let warningOverlay = document.getElementById('size-warning-overlay');
+            
+            if (!meetsRequirements) {
+                // Show warning if not already shown
+                if (!warningOverlay) {
+                    warningOverlay = createSizeWarning();
+                    console.log(`Window too small: ${width}×${height}, required: ${MIN_WIDTH}×${MIN_HEIGHT}`);
+                } else {
+                    // Update current size display
+                    const currentSizeSpan = document.getElementById('current-size');
+                    if (currentSizeSpan) {
+                        currentSizeSpan.textContent = `${width} × ${height}`;
+                    }
+                }
+            } else {
+                // Requirements met
+                if (warningOverlay) {
+                    console.log(`Window size OK: ${width}×${height}, requirements met!`);
+                    
+                    // Check if experiment has started
+                    const hasStarted = typeof jsPsych !== 'undefined' && jsPsych.data && jsPsych.data.get().count() > 0;
+                    
+                    if (hasStarted) {
+                        // Experiment in progress - refresh to restart properly
+                        console.log('Experiment was in progress, refreshing page...');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1000);
+                        
+                        // Show brief "refreshing" message
+                        warningOverlay.innerHTML = `
+                            <div style="max-width: 400px;">
+                                <h2 style="color: #4ecdc4; margin-bottom: 20px;">✅ Size Requirements Met!</h2>
+                                <p style="font-size: 18px;">Refreshing page to restart experiment...</p>
+                                <div style="margin-top: 20px;">
+                                    <div style="display: inline-block; width: 20px; height: 20px; border: 3px solid #f3f3f3; border-top: 3px solid #4ecdc4; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                                </div>
+                                <style>
+                                    @keyframes spin {
+                                        0% { transform: rotate(0deg); }
+                                        100% { transform: rotate(360deg); }
+                                    }
+                                </style>
+                            </div>
+                        `;
+                    } else {
+                        // Experiment hasn't started yet - just remove warning
+                        warningOverlay.remove();
+                    }
+                }
+            }
+            
+            return meetsRequirements;
+        }
+        
+        // Monitor window size changes
+        let resizeTimeout;
+        window.addEventListener('resize', function() {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(checkWindowSize, 100); // Debounce resize events
+        });
+        
+        // Initial check when page loads
+        window.addEventListener('load', function() {
+            setTimeout(checkWindowSize, 500); // Give page time to fully load
+        });
+        
+        // Also check immediately
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(checkWindowSize, 100);
+        });
+        
+        // Periodic check (backup)
+        setInterval(checkWindowSize, 2000);
+    </script>
+    
+    <!-- System Information Collection -->
+    <script>
+        // Enhanced system information collection
+        function collectSystemInformation() {
+            console.log('=== COLLECTING SYSTEM INFORMATION ===');
+            
+            let systemInfo = {
+                fullscreen: 'no',
+                browser_name: 'unknown',
+                browser_version: 'unknown',
+                os_name: 'unknown',
+                os_version: 'unknown',
+                tablet: 'no',
+                mobile: 'no',
+                screen_resolution: 'unknown',
+                window_resolution: 'unknown'
+            };
+            
+            try {
+                // Screen and window resolution
+                systemInfo.screen_resolution = screen.width + 'x' + screen.height;
+                systemInfo.window_resolution = window.innerWidth + 'x' + window.innerHeight;
+                
+                // Check if fullscreen (will be updated during experiment)
+                systemInfo.fullscreen = document.fullscreenElement ? 'yes' : 'no';
+                
+                // Use Bowser if available for detailed browser/OS info
+                if (typeof bowser !== 'undefined') {
+                    const browser = bowser.getParser(window.navigator.userAgent);
+                    const browserInfo = browser.getBrowser();
+                    const osInfo = browser.getOS();
+                    const platformInfo = browser.getPlatform();
+                    
+                    systemInfo.browser_name = browserInfo.name || 'unknown';
+                    systemInfo.browser_version = browserInfo.version || 'unknown';
+                    systemInfo.os_name = osInfo.name || 'unknown';
+                    systemInfo.os_version = osInfo.version || 'unknown';
+                    
+                    // Determine device type
+                    systemInfo.mobile = platformInfo.type === 'mobile' ? 'yes' : 'no';
+                    systemInfo.tablet = platformInfo.type === 'tablet' ? 'yes' : 'no';
+                    
+                } else {
+                    // Fallback to basic user agent parsing
+                    const userAgent = navigator.userAgent;
+                    
+                    // Browser detection
+                    if (userAgent.includes('Chrome') && !userAgent.includes('Edg')) {
+                        systemInfo.browser_name = 'Chrome';
+                        const match = userAgent.match(/Chrome\/([0-9.]+)/);
+                        systemInfo.browser_version = match ? match[1] : 'unknown';
+                    } else if (userAgent.includes('Firefox')) {
+                        systemInfo.browser_name = 'Firefox';
+                        const match = userAgent.match(/Firefox\/([0-9.]+)/);
+                        systemInfo.browser_version = match ? match[1] : 'unknown';
+                    } else if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) {
+                        systemInfo.browser_name = 'Safari';
+                        const match = userAgent.match(/Version\/([0-9.]+)/);
+                        systemInfo.browser_version = match ? match[1] : 'unknown';
+                    } else if (userAgent.includes('Edg')) {
+                        systemInfo.browser_name = 'Edge';
+                        const match = userAgent.match(/Edg\/([0-9.]+)/);
+                        systemInfo.browser_version = match ? match[1] : 'unknown';
+                    }
+                    
+                    // OS detection
+                    if (userAgent.includes('Windows NT')) {
+                        systemInfo.os_name = 'Windows';
+                        const match = userAgent.match(/Windows NT ([0-9.]+)/);
+                        systemInfo.os_version = match ? match[1] : 'unknown';
+                    } else if (userAgent.includes('Mac OS X')) {
+                        systemInfo.os_name = 'macOS';
+                        const match = userAgent.match(/Mac OS X ([0-9_]+)/);
+                        systemInfo.os_version = match ? match[1].replace(/_/g, '.') : 'unknown';
+                    } else if (userAgent.includes('Linux')) {
+                        systemInfo.os_name = 'Linux';
+                    } else if (userAgent.includes('Android')) {
+                        systemInfo.os_name = 'Android';
+                        const match = userAgent.match(/Android ([0-9.]+)/);
+                        systemInfo.os_version = match ? match[1] : 'unknown';
+                    } else if (userAgent.includes('iOS') || userAgent.includes('iPhone OS')) {
+                        systemInfo.os_name = 'iOS';
+                        const match = userAgent.match(/OS ([0-9_]+)/);
+                        systemInfo.os_version = match ? match[1].replace(/_/g, '.') : 'unknown';
+                    }
+                    
+                    // Mobile/tablet detection
+                    systemInfo.mobile = /Android|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent) ? 'yes' : 'no';
+                    systemInfo.tablet = /iPad|Android.*Tablet|Kindle|Silk/i.test(userAgent) ? 'yes' : 'no';
+                }
+                
+                // Additional checks for mobile/tablet
+                if (systemInfo.mobile === 'no' && systemInfo.tablet === 'no') {
+                    // Check touch capability as additional indicator
+                    const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+                    const smallScreen = window.innerWidth <= 768;
+                    
+                    if (hasTouch && smallScreen) {
+                        systemInfo.mobile = 'yes';
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Error collecting system information:', error);
+            }
+            
+            console.log('System Information collected:', systemInfo);
+            return systemInfo;
+        }
+        
+        // Global system info object
+        window.systemInfo = collectSystemInformation();
+        
+        // Update system info when window is resized
+        window.addEventListener('resize', function() {
+            window.systemInfo.window_resolution = window.innerWidth + 'x' + window.innerHeight;
+        });
+        
+        // Track fullscreen changes
+        document.addEventListener('fullscreenchange', function() {
+            window.systemInfo.fullscreen = document.fullscreenElement ? 'yes' : 'no';
+        });
+        
+        // Update system info periodically
+        setInterval(function() {
+            window.systemInfo.window_resolution = window.innerWidth + 'x' + window.innerHeight;
+            window.systemInfo.fullscreen = document.fullscreenElement ? 'yes' : 'no';
+        }, 1000);
+    </script>
+    
+    <!-- Qualtrics Integration -->
+    <script>
+        function isRunningInQualtrics() {
+            return typeof Qualtrics !== 'undefined' && Qualtrics.SurveyEngine;
+        }
+        
+        function hideQualtricsButtons() {
+            try {
+                const nextButton = document.getElementById('NextButton');
+                if (nextButton) {
+                    nextButton.style.display = 'none';
+                    nextButton.style.visibility = 'hidden';
+                }
+                
+                const prevButton = document.getElementById('PreviousButton');
+                if (prevButton) {
+                    prevButton.style.display = 'none';
+                    prevButton.style.visibility = 'hidden';
+                }
+                
+                if (typeof $ !== 'undefined') {
+                    $('#NextButton').hide();
+                    $('#PreviousButton').hide();
+                    $('input[type="submit"][value="Next"]').hide();
+                    $('input[value=">>"]').hide();
+                }
+                
+                console.log('Qualtrics buttons hidden');
+            } catch (e) {
+                console.log('Error hiding buttons:', e);
+            }
+        }
+        
+        function showQualtricsButtons() {
+            try {
+                const nextButton = document.getElementById('NextButton');
+                if (nextButton) {
+                    nextButton.style.display = '';
+                    nextButton.style.visibility = 'visible';
+                }
+                
+                const prevButton = document.getElementById('PreviousButton');
+                if (prevButton) {
+                    prevButton.style.display = '';
+                    prevButton.style.visibility = 'visible';
+                }
+                
+                if (typeof $ !== 'undefined') {
+                    $('#NextButton').show();
+                    $('#PreviousButton').show();
+                    $('input[type="submit"][value="Next"]').show();
+                    $('input[value=">>"]').show();
+                }
+                
+                console.log('Qualtrics buttons shown');
+            } catch (e) {
+                console.log('Error showing buttons:', e);
+            }
+        }
+        
+        window.addEventListener('load', function() {
+            if (isRunningInQualtrics()) {
+                console.log('CM experiment loaded in Qualtrics environment');
+                hideQualtricsButtons();
+            }
+        });
+        
+        window.onCMComplete = function() {
+            console.log('CM experiment completed');
+            if (isRunningInQualtrics()) {
+                showQualtricsButtons();
+                setTimeout(function() {
+                    try {
+                        Qualtrics.SurveyEngine.clickNextButton();
+                    } catch (e) {
+                        console.log('Could not automatically advance Qualtrics survey');
+                    }
+                }, 2000);
+            }
+        };
+    </script>
+</head>
+
+<body>
+    <div id="qualtrics-status" style="display: none; position: fixed; top: 0; left: 0; background: #007ACC; color: white; padding: 5px 10px; font-size: 12px; z-index: 10000;">
+        Running in Qualtrics
+    </div>
+    
+    <script>
+        if (typeof Qualtrics !== 'undefined') {
+            document.getElementById('qualtrics-status').style.display = 'block';
+        }
+    </script>
+
+    <script>
+        // ===== SIMPLE TEST FIRST =====
+        console.log('Starting simple keyboard test...');
+        
+        // Add a simple test before the main experiment
+        var simple_test = {
+            type: 'html-keyboard-response',
+            stimulus: '<div style="background: #f0f0f0; padding: 50px; text-align: center;"><h2>SIMPLE TEST</h2><p>Press ANY key to continue</p><p style="color: #666;">This tests basic keyboard detection</p></div>',
+            choices: jsPsych.ALL_KEYS,
+            on_start: function() {
+                console.log('=== SIMPLE TEST START ===');
+                document.body.focus();
+                document.body.tabIndex = -1;
+                
+                // Raw event listener
+                document.addEventListener('keydown', function(e) {
+                    console.log('Raw key event:', e.key, e.code);
+                });
+            },
+            on_finish: function(data) {
+                console.log('=== SIMPLE TEST SUCCESS ===');
+                console.log('Detected key:', data.response);
+            }
+        };
+
+        // ===== TASK CONFIGURATION =====
+        var pd = false;  // Disable photodiode for online use
+        
+        // Stimuli paths
+        var fix_stim = 'images/fix.png';
+        var go_stim = ['images/go_stim1.png', 'images/go_stim2.png', 'images/go_stim3.png',
+                       'images/go_stim4.png', 'images/go_stim5.png', 'images/go_stim6.png',
+                       'images/go_stim7.png', 'images/go_stim8.png', 'images/go_stim9.png',
+                       'images/go_stim10.png'];
+        var start_stim = 'images/start.png';
+        var stop_stim = 'images/stop.png';
+        var tone_stim = 'audio/tone.mp3'; // Re-enable audio
+
+        // Experiment design
+        let stop_prop = 0.4;
+        let n_trials_per_block = 30;
+        let n_practice_trials = 13;
+        var n_blocks_exp = 6;
+        var n_secs = [5, 4, 3];
+        let t_stop_min = 0.5;
+        let t_stop_max = 2.5;
+
+        // Timing intervals (milliseconds)
+        let ITI = 2000;
+        let FIX = 250;
+        let MAXRT = 1250;
+        let iFBT = 750;
+        let bFBT = 15000;
+
+        // Screen settings - made more flexible for online use
+        var fullscreen = false; // Disable fullscreen for embedded use
+        var minWidth = 800;
+        var minHeight = 600;
+
+        // Disable redirection for Qualtrics
+        var redirect_onCompletion = false;
+
+        // ===== INSTRUCTIONS =====
+        let page1 = [
+            "<p>In this experiment, a circle will appear in the center " +
+            "of the screen.</p><p>Your task is to move the cursor around the " +
+            "circle at a steady rate until the word <strong>STOP</strong> " +
+            "appears.</p><p>On some trials, the <strong>STOP</strong> will " +
+            "occur at the end of a countdown, on others it will interrupt the " +
+            "countdown before it is completed.</p>"
+        ];
+
+        let page2 = [
+            '<p>It is important that you not move the mouse before the <strong>START</strong> cue is shown.</p>' +
+            '<p>Remember that the task is to stop when the <strong>STOP</strong> cue is shown.</p>' +
+            '<p>We will start with a short practice block in which you will receive immediate feedback. ' +
+            'You will no longer receive immediate feedback in the experimental phase.</p>'+
+            '<p>However, at the end of each experimental block, ' +
+            'there will be a 15 second break. During this break, we will show you some information about ' +
+            'your mean performance in the previous block.</p>' +
+            '<p>The experiment consists of 1 practice block and ' + n_blocks_exp +
+            ' experimental blocks.</p>'
+        ];
+
+        // Feedback messages
+        let correct_msg = 'Good job!';
+        let no_signal_header = "<p><b>GO TRIALS: </b></p>";
+        let avg_rt_msg = "<p>Average response time = %.2f seconds</p>";
+        let prop_inc_msg = "<p>Proportion too far from the circle = %.2f (should be 0)</p>";
+        let prop_ww_msg = "<p>Proportion wrong way = %.2f (should be 0)</p>";
+        let prop_slow_msg = "<p>Proportion too slow = %.2f (should be 0)</p>";
+        let prop_early_msg = "<p>Proportion early stops = %.2f (should be 0)</p>";
+        let stop_signal_header = "<p><b>STOP-SIGNAL TRIALS: </b></p>";
+        let next_block_msg = "<p>You can take a short break, the next block starts in <span id='timer'>15</span></p>";
+        let final_block_msg = "<p>Press space to continue...</p>";
+
+        var welcome_message = ['<p>Welcome to the experiment.</p><p>Press "Next" to begin.</p>'];
+        var text_at_start_block = '<p>Press the <strong>spacebar</strong> to begin.</p><p style="font-size: 14px; color: #666;">(Make sure to click on this screen first if the spacebar doesn\'t work)</p>';
+        var get_ready_message = '<p>Get ready...</p>';
+        var end_message = "<p>Thank you for your participation.</p><p>Press space to finalize the experiment.</p>";
+
+        // ===== VARIABLES =====
+        var timeline = [];
+        var trial_ind = 1;
+        var block_ind = 0;
+        var fix_time = null;
+        var trial_type = null;
+        var count = null;
+        var start_time = null;
+        var stop_signal_time = null;
+        var stop_time = null;
+        var goRT = null;
+        var RT = null;
+        var go_pos_x = null;
+        var go_pos_y = null;
+        var go_times = null;
+        var stop_pos_x = null;
+        var stop_pos_y = null;
+        var stop_times = null;
+        var exclude = null;
+
+        // Block feedback variables
+        var n_stop = 0;
+        var n_go = 0;
+        var inc = 0;
+        var ww = 0;
+        var slow = 0;
+        var av_goRT = 0;
+        var av_ssRT = 0;
+        var early_ns = 0;
+
+        var focus = 'focus';
+        var fullscr_ON = 'no';
+
+        // Experiment timing and data tracking
+        var experiment_start_time = null;
+        var experiment_end_time = null;
+        var all_trial_data = [];
+        var practice_trial_count = 0;
+
+        // Generate subject ID
+        var code = jsPsych.randomization.randomID();
+        jsPsych.data.addProperties({participantID: code});
+
+        // Preload stimuli
+        var pre_load_stimuli = go_stim.concat([fix_stim, start_stim, stop_stim]);
+
+        // ===== CREATE TRIAL DESIGN =====
+        var trial_types = Array.prototype.concat(
+            Array(Math.ceil(n_trials_per_block / n_secs.length * (1 - stop_prop))).fill('go'),
+            Array(Math.ceil(n_trials_per_block / n_secs.length * stop_prop)).fill('stop')
+        );
+
+        var design = jsPsych.randomization.factorial(
+            {time : n_secs, trial_type: trial_types}, 1
+        );
+
+        if (design.length > n_trials_per_block) {
+            console.log('Cropping ' + (design.length - n_trials_per_block) +
+                        ' trials from the end of the counterbalanced design');
+            design = design.slice(0, n_trials_per_block);
+        }
+
+        // ===== PHOTODIODE FUNCTIONS (Simplified for online) =====
+        function createPhotodiodeBox() {
+            // Simplified for online use - no photodiode needed
+            console.log('Photodiode disabled for online use');
+        }
+
+        function hidePhotodiodeBox() {
+            // No-op for online use
+        }
+
+        function showPhotodiodeBox() {
+            // No-op for online use
+        }
+
+        // ===== TRIGGER FUNCTIONS (Simplified for online) =====
+        function trigger_write(cmd) {
+            // Simplified for online use - just log
+            console.log('[TRIGGER]', cmd);
+        }
+
+        // ===== TRIAL DEFINITIONS =====
+        var welcome = {
+            type: "instructions",
+            pages: welcome_message,
+            show_clickable_nav: true,
+            allow_backward: false,
+            button_label_next: "Next"
+        };
+
+        var instructions = {
+            type: "instructions",
+            pages: [page1, page2],
+            show_clickable_nav: true,
+            button_label_previous: "Previous",
+            button_label_next: "Next"
+        };
+
+        // Skip trigger connection for online use
+        var skip_triggers = {
+            type: 'html-keyboard-response',
+            stimulus: '<p>Loading experiment...</p>',
+            choices: jsPsych.NO_KEYS,
+            trial_duration: 500
+        };
+
+        var write_cm_data = function() {    
+            // Store trial data for comprehensive analysis
+            var currentTrialData = {
+                block: block_ind,
+                trial: trial_ind,
+                trial_type: trial_type,
+                goRT: goRT,
+                RT: RT,
+                exclude: exclude,
+                is_practice: block_ind === 0,
+                timestamp: performance.now()
+            };
+            
+            all_trial_data.push(currentTrialData);
+            
+            // Count practice trials
+            if (block_ind === 0) {
+                practice_trial_count++;
+            }
+            
+            console.log('Trial data stored:', currentTrialData);
+        };
+
+        var iti_start_t;
+        var iti = {
+            type: 'html-keyboard-response',
+            stimulus: '',
+            choices: jsPsych.NO_KEYS,
+            trial_duration: ITI,
+            on_start: function() {
+                iti_start_t = performance.now();
+                setTimeout(write_cm_data, 20);
+            },
+            on_finish: function() {
+                console.log('ITI took ' + (performance.now() - iti_start_t) + 'ms');
+            }
+        };
+
+        var block_start = {
+            type: 'html-keyboard-response',
+            stimulus: '<div style="text-align: center; padding: 50px;"><p style="font-size: 24px;">Press the <strong>spacebar</strong> to begin.</p><p style="font-size: 16px; color: #666;">If spacebar doesn\'t work, <strong>click anywhere on this screen first</strong>, then press spacebar</p><p style="font-size: 14px; color: #999;">You can also try pressing any other key</p></div>',
+            choices: jsPsych.ALL_KEYS, // Accept any key, not just space
+            on_start: function() {
+                console.log('=== BLOCK START SCREEN ===');
+                console.log('Waiting for ANY keyboard input...');
+                
+                // Force focus and add click handler
+                setTimeout(() => {
+                    document.body.focus();
+                    document.body.tabIndex = -1;
+                    console.log('Applied focus to document');
+                }, 100);
+                
+                // Add click listener to help with focus
+                var clickHandler = function() {
+                    console.log('Document clicked - keyboard should work now');
+                    document.body.focus();
+                    document.removeEventListener('click', clickHandler);
+                };
+                document.addEventListener('click', clickHandler);
+                
+                // Add direct keydown listener for debugging
+                var keyHandler = function(e) {
+                    console.log('Raw keydown detected:', e.key, e.code, e.which);
+                    document.removeEventListener('keydown', keyHandler);
+                };
+                document.addEventListener('keydown', keyHandler);
+            },
+            on_finish: function(data) {
+                console.log('=== KEY DETECTED ===');
+                console.log('Key pressed:', data.response);
+                console.log('Moving to next trial...');
+            }
+        };
+
+        var block_get_ready = {
+            type: 'html-keyboard-response',
+            stimulus: get_ready_message,
+            choices: jsPsych.NO_KEYS,
+            trial_duration: 2000,
+        };
+
+        var stimulus = {
+            type: 'custom-continuous-movement-plugin',
+            fixation_duration: FIX,
+            time: jsPsych.timelineVariable('time'),
+            t_stop_min: t_stop_min,
+            trial_type: jsPsych.timelineVariable('trial_type'),
+            trial_duration: MAXRT,
+            tone: tone_stim, // Re-enable audio
+            feedback: function() { return block_ind == 0 },
+            feedback_duration: iFBT,
+            iti: ITI,
+            on_start: function(data) {  
+                trigger_write(10);
+                fix_time = performance.now();
+                start_time = performance.now();
+            },
+            on_finish: function(data) {
+                trial_type = data.trial_type_data || data.trial_type;
+                count = data.count;
+                stop_signal_time = data.stop_signal_time;
+                goRT = data.goRT;
+                RT = data.RT;
+                go_pos_x = data.go_pos_x;
+                go_pos_y = data.go_pos_y;
+                go_times = data.go_times;
+                stop_pos_x = data.stop_pos_x;
+                stop_pos_y = data.stop_pos_y;
+                stop_times = data.stop_times;
+                exclude = data.exclude;
+                trial_ind++;
+
+                // Block feedback tracking
+                if (trial_type == 'go') {
+                    n_go++;
+                } else {
+                    n_stop++;
+                }
+                if (exclude == 'too far from the circle') {
+                    inc++;
+                } else if (exclude == 'wrong way') {
+                    ww++;
+                } else if (exclude == 'too slow') {
+                    slow++;
+                } else if (exclude == 'remember: don\'t stop too early') {
+                    early_ns++;
+                }
+                if (goRT != null) {
+                    av_goRT += goRT;
+                }
+                if (RT != null) {
+                    av_ssRT += RT;
+                }
+            }
+        };
+
+        var block_feedback = {
+            type: 'html-keyboard-response',
+            trial_duration: bFBT,
+            choices: function() {
+                if (block_ind == n_blocks_exp){
+                    return ['p', 'space']
+                } else {
+                    return ['p']
+                }
+            },
+            stimulus: function() {
+                if (block_ind == n_blocks_exp){
+                    var next_block_text = final_block_msg
+                } else {
+                    var count = (bFBT / 1000);
+                    var counter;
+                    clearInterval(counter);
+                    counter = setInterval(timer, 1000);
+                    function timer(){
+                        count--;
+                        if (count <= 0){
+                            clearInterval(counter);
+                        }
+                        if (document.getElementById("timer")) {
+                            document.getElementById("timer").innerHTML = count;
+                        }
+                    }
+                    var next_block_text = next_block_msg
+                }
+
+                return [
+                    sprintf(prop_inc_msg, inc / (n_go + n_stop)) +
+                    sprintf(prop_ww_msg, ww / (n_go + n_stop)) +
+                    sprintf(prop_slow_msg, slow / (n_go + n_stop)) +
+                    no_signal_header +
+                    sprintf(avg_rt_msg, av_goRT / n_go / 1000) +
+                    sprintf(prop_early_msg, early_ns / (n_go + n_stop)) +
+                    stop_signal_header +
+                    sprintf(avg_rt_msg, av_ssRT / n_stop / 1000) +
+                    next_block_text
+                ]
+            },
+            on_finish: function() {
+                trial_ind = 1;
+                block_ind = block_ind + 1;
+                n_stop = 0;
+                n_go = 0;
+                inc = 0;
+                ww = 0;
+                slow = 0;
+                av_goRT = 0;
+                av_ssRT = 0;
+                early_ns = 0;
+            }
+        };
+
+        var evaluate_end_if_practice = {
+            type: 'call-function',
+            func: function() {
+                if (block_ind == 0) {
+                    if (trial_ind > n_practice_trials) {
+                        jsPsych.endCurrentTimeline();
+                    }
+                }
+            }
+        };
+
+        function calculateStatistics(values) {
+            if (!values || values.length === 0) return { avg: 0, median: 0, min: 0, max: 0 };
+            
+            const sortedValues = values.slice().sort((a, b) => a - b);
+            const avg = values.reduce((sum, val) => sum + val, 0) / values.length;
+            const median = sortedValues.length % 2 === 0 
+                ? (sortedValues[sortedValues.length / 2 - 1] + sortedValues[sortedValues.length / 2]) / 2
+                : sortedValues[Math.floor(sortedValues.length / 2)];
+            const min = sortedValues[0];
+            const max = sortedValues[sortedValues.length - 1];
+            
+            return { avg, median, min, max };
+        }
+
+        function sendDataToQualtrics() {
+            try {
+                console.log("=== CM EXPERIMENT DATA ANALYSIS ===");
+                
+                // Calculate experiment duration
+                experiment_end_time = performance.now();
+                const experiment_duration = experiment_end_time - experiment_start_time;
+                
+                // Filter and analyze trial data
+                const allTrials = all_trial_data.filter(trial => trial.trial_type);
+                const practiceTrials = allTrials.filter(trial => trial.is_practice);
+                const experimentalTrials = allTrials.filter(trial => !trial.is_practice);
+                
+                // Separate by trial type
+                const goTrials = allTrials.filter(trial => trial.trial_type === 'go');
+                const stopTrials = allTrials.filter(trial => trial.trial_type === 'stop');
+                
+                // Get valid trials (not excluded)
+                const validTrials = allTrials.filter(trial => !trial.exclude || trial.exclude === '' || trial.exclude === 'no');
+                const excludedTrials = allTrials.filter(trial => trial.exclude && trial.exclude !== '' && trial.exclude !== 'no');
+                
+                // Extract reaction times for go trials (goRT)
+                const goRTs = goTrials
+                    .filter(trial => trial.goRT && trial.goRT > 0)
+                    .map(trial => trial.goRT);
+                
+                // Extract reaction times for stop trials (RT)
+                const stopRTs = stopTrials
+                    .filter(trial => trial.RT && trial.RT > 0)
+                    .map(trial => trial.RT);
+                
+                // Calculate statistics
+                const goStats = calculateStatistics(goRTs);
+                const stopStats = calculateStatistics(stopRTs);
+                
+                // Get the latest system information
+                const currentSystemInfo = window.systemInfo;
+                
+                // Prepare comprehensive data object
+                const cmData = {
+                    // Required identifier
+                    cm_subject_id: code,
+                    
+                    // Experiment duration and completion
+                    cm_experiment_duration: Math.round(experiment_duration),
+                    cm_blocks_completed: Math.max(0, block_ind - 1), // Subtract 1 because practice block is block 0
+                    
+                    // Trial counts
+                    cm_total_trials: allTrials.length,
+                    cm_go_trials: goTrials.length,
+                    cm_stop_trials: stopTrials.length,
+                    cm_practice_trials: practiceTrials.length,
+                    cm_valid_trials: validTrials.length,
+                    cm_excluded_trials: excludedTrials.length,
+                    
+                    // Go reaction time statistics (milliseconds)
+                    cm_avg_go_rt: Math.round(goStats.avg || 0),
+                    cm_median_go_rt: Math.round(goStats.median || 0),
+                    cm_min_go_rt: Math.round(goStats.min || 0),
+                    cm_max_go_rt: Math.round(goStats.max || 0),
+                    
+                    // Stop reaction time statistics (milliseconds)
+                    cm_avg_stop_rt: Math.round(stopStats.avg || 0),
+                    cm_median_stop_rt: Math.round(stopStats.median || 0),
+                    cm_min_stop_rt: Math.round(stopStats.min || 0),
+                    cm_max_stop_rt: Math.round(stopStats.max || 0),
+                    
+                    // System information
+                    cm_fullscreen: currentSystemInfo.fullscreen,
+                    cm_browser_name: currentSystemInfo.browser_name,
+                    cm_browser_version: currentSystemInfo.browser_version,
+                    cm_os_name: currentSystemInfo.os_name,
+                    cm_os_version: currentSystemInfo.os_version,
+                    cm_tablet: currentSystemInfo.tablet,
+                    cm_mobile: currentSystemInfo.mobile,
+                    cm_screen_resolution: currentSystemInfo.screen_resolution,
+                    cm_window_resolution: currentSystemInfo.window_resolution
+                };
+
+                console.log("=== DETAILED DATA SUMMARY ===");
+                console.log(`Experiment Duration: ${(experiment_duration / 1000).toFixed(2)} seconds`);
+                console.log(`Total Trials: ${allTrials.length}`);
+                console.log(`Practice Trials: ${practiceTrials.length}`);
+                console.log(`Go Trials: ${goTrials.length}, Valid Go RTs: ${goRTs.length}`);
+                console.log(`Stop Trials: ${stopTrials.length}, Valid Stop RTs: ${stopRTs.length}`);
+                console.log(`Excluded Trials: ${excludedTrials.length}`);
+                console.log(`Blocks Completed: ${Math.max(0, block_ind - 1)}`);
+                console.log("Go RT Stats:", goStats);
+                console.log("Stop RT Stats:", stopStats);
+                console.log("Complete data to send:", cmData);
+
+                // Multiple methods to send data to Qualtrics for maximum compatibility
+                let dataSetMethods = [];
+
+                // Method 1: Direct Qualtrics API
+                if (typeof Qualtrics !== 'undefined' && Qualtrics.SurveyEngine) {
+                    console.log("Method 1: Direct Qualtrics API");
+                    try {
+                        Object.keys(cmData).forEach(key => {
+                            Qualtrics.SurveyEngine.setEmbeddedData(key, cmData[key]);
+                            console.log(`Set ${key}: ${cmData[key]}`);
+                        });
+                        dataSetMethods.push('Direct Qualtrics API');
+                    } catch (e) {
+                        console.error("Direct Qualtrics API failed:", e);
+                    }
+                }
+
+                // Method 2: PostMessage to parent window
+                try {
+                    window.parent.postMessage({
+                        type: 'SET_QUALTRICS_EMBEDDED_DATA',
+                        data: cmData
+                    }, '*');
+                    console.log("Method 2: PostMessage sent to parent");
+                    dataSetMethods.push('PostMessage to parent');
+                } catch (e) {
+                    console.error("PostMessage failed:", e);
+                }
+
+                // Method 3: Parent window Qualtrics API
+                try {
+                    if (window.parent && window.parent.Qualtrics && window.parent.Qualtrics.SurveyEngine) {
+                        console.log("Method 3: Parent Qualtrics API");
+                        Object.keys(cmData).forEach(key => {
+                            window.parent.Qualtrics.SurveyEngine.setEmbeddedData(key, cmData[key]);
+                        });
+                        dataSetMethods.push('Parent Qualtrics API');
+                    }
+                } catch (e) {
+                    console.error("Parent Qualtrics access failed:", e);
+                }
+
+                // Method 4: Store in window objects for retrieval
+                try {
+                    window.cmExperimentResults = cmData;
+                    if (window.parent) {
+                        window.parent.cmExperimentResults = cmData;
+                    }
+                    console.log("Method 4: Stored in window objects");
+                    dataSetMethods.push('Window storage');
+                } catch (e) {
+                    console.error("Window storage failed:", e);
+                }
+
+                // Method 5: Try to set data via jQuery if available
+                if (typeof $ !== 'undefined') {
+                    try {
+                        // Attempt to find and set hidden form fields
+                        Object.keys(cmData).forEach(key => {
+                            const hiddenField = $(`input[name="${key}"]`);
+                            if (hiddenField.length > 0) {
+                                hiddenField.val(cmData[key]);
+                                console.log(`Set hidden field ${key}: ${cmData[key]}`);
+                            }
+                        });
+                        dataSetMethods.push('jQuery hidden fields');
+                    } catch (e) {
+                        console.error("jQuery method failed:", e);
+                    }
+                }
+
+                // Method 6: Custom event dispatch
+                try {
+                    const customEvent = new CustomEvent('cmDataReady', {
+                        detail: cmData
+                    });
+                    window.dispatchEvent(customEvent);
+                    if (window.parent) {
+                        window.parent.dispatchEvent(customEvent);
+                    }
+                    console.log("Method 6: Custom event dispatched");
+                    dataSetMethods.push('Custom event');
+                } catch (e) {
+                    console.error("Custom event failed:", e);
+                }
+
+                console.log("=== DATA TRANSFER SUMMARY ===");
+                console.log("Successful methods:", dataSetMethods);
+                console.log("Total variables sent:", Object.keys(cmData).length);
+                console.log("=== ALL CM DATA METHODS ATTEMPTED ===");
+
+            } catch (error) {
+                console.error("Qualtrics data transfer error:", error);
+            }
+        }
+
+        var goodbye = {
+            type: "html-keyboard-response",
+            stimulus: end_message,
+            on_start: function(data) {
+                sendDataToQualtrics();
+            },
+            on_finish: function() {
+                try {
+                    window.parent.postMessage({type: 'CM_COMPLETE'}, '*');
+                    console.log("CM_COMPLETE message sent to parent");
+                } catch (e) {
+                    console.log("Failed to send CM completion message:", e);
+                }
+                
+                if (typeof window.onCMComplete === 'function') {
+                    window.onCMComplete();
+                }
+            }
+        };
+
+        // ===== BUILD TIMELINE =====
+        var start_timeline = [simple_test, welcome, skip_triggers, instructions];
+
+        var start_procedure = {
+            timeline: start_timeline,
+        };
+
+        var trial_procedure = {
+            timeline: [stimulus, iti, evaluate_end_if_practice],
+            timeline_variables: design,
+            randomize_order: true,
+            repetitions: 1,
+        };
+
+        var block_procedure = {
+            timeline: [block_start, block_get_ready, trial_procedure, block_feedback],
+            randomize_order: false,
+            repetitions: n_blocks_exp + 1,
+        };
+
+        var end_procedure = {
+            timeline: [goodbye],
+        };
+
+        timeline.push(start_procedure, block_procedure, end_procedure);
+
+        // ===== START EXPERIMENT =====
+        jsPsych.init({
+            timeline: timeline,
+            preload_images: pre_load_stimuli,
+            preload_audio: [tone_stim],
+            on_start: function() {
+                createPhotodiodeBox();
+                console.log('jsPsych experiment started');
+                
+                // Final window size check before starting
+                if (!checkWindowSize()) {
+                    console.log('Window size check failed at experiment start');
+                    return; // Don't start if window is too small
+                }
+                
+                // Record experiment start time
+                experiment_start_time = performance.now();
+                
+                // Update system info when experiment starts
+                window.systemInfo = collectSystemInformation();
+                
+                // Test if audio loaded properly
+                try {
+                    var audioBuffer = jsPsych.pluginAPI.getAudioBuffer(tone_stim);
+                    if (audioBuffer) {
+                        console.log('✅ Audio file loaded successfully');
+                    } else {
+                        console.log('⚠️ Audio file not loaded, but continuing anyway');
+                    }
+                } catch (e) {
+                    console.log('⚠️ Audio test failed:', e);
+                }
+                
+                // Ensure the document has focus for keyboard events
+                setTimeout(() => {
+                    document.body.focus();
+                    document.body.tabIndex = -1;
+                    console.log('Document focus applied');
+                }, 500);
+                
+                // Global click handler to maintain focus
+                document.addEventListener('click', function() {
+                    document.body.focus();
+                });
+            },
+            on_interaction_data_update: function(data) {
+                var interaction = data.event;
+                if (interaction.includes("fullscreen")){
+                    if (fullscr_ON == 'no') {
+                        fullscr_ON = 'yes'; 
+                        window.systemInfo.fullscreen = 'yes';
+                        return fullscr_ON;
+                    } else if (fullscr_ON == 'yes') {
+                        fullscr_ON = 'no'; 
+                        window.systemInfo.fullscreen = 'no';
+                        return fullscr_ON;
+                    }
+                } else if (interaction == 'blur' || interaction == 'focus'){
+                    focus = interaction;
+                    return focus;
+                }
+            },
+            exclusions: {
+                // Remove automatic jsPsych exclusions since we handle it manually
+                // min_width: minWidth,
+                // min_height: minHeight
+            },
+            on_finish: function() {
+                console.log('=== EXPERIMENT COMPLETED ===');
+                sendDataToQualtrics();
+                
+                try {
+                    window.parent.postMessage({type: 'CM_COMPLETE'}, '*');
+                    console.log("CM_COMPLETE message sent to parent");
+                } catch (e) {
+                    console.log("Failed to send CM completion message:", e);
+                }
+                
+                if (typeof window.onCMComplete === 'function') {
+                    window.onCMComplete();
+                }
+            }
+        });
+    </script>
+</body>
+</html>
