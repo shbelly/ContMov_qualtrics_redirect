@@ -431,19 +431,22 @@
             if (qualtricsURL && cmData) {
                 console.log('Redirecting to Qualtrics with data:', qualtricsURL);
                 
-                // Add ALL data as URL parameters
-                var separator = qualtricsURL.includes('?') ? '&' : '?';
-                var dataParams = '';
+                // Parse the original Qualtrics URL to preserve all existing parameters
+                const url = new URL(qualtricsURL);
                 
-                // Add each data field as URL parameter
+                // Add ALL CM data as URL parameters while preserving existing ones
                 Object.keys(cmData).forEach(key => {
-                    dataParams += '&' + key + '=' + encodeURIComponent(cmData[key]);
+                    url.searchParams.set(key, cmData[key]);
                 });
                 
-                var finalURL = qualtricsURL + separator + dataParams.substring(1); // Remove first &
+                // Ensure cm_completed is set
+                url.searchParams.set('cm_completed', '1');
+                
+                const finalURL = url.toString();
                 
                 console.log('Final redirect URL length:', finalURL.length);
                 console.log('Redirecting to:', finalURL.substring(0, 200) + '...');
+                console.log('CM data fields added:', Object.keys(cmData).length);
                 
                 window.location.href = finalURL;
             } else {
