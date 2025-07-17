@@ -240,12 +240,38 @@
 
         var block_start = {
             type: 'html-keyboard-response',
-            stimulus: text_at_start_block,
+            stimulus: '<div style="text-align: center; padding: 50px;"><p style="font-size: 24px;">Press the <strong>spacebar</strong> to begin this block.</p><p style="font-size: 16px; color: #666;">If spacebar doesn\'t work, <strong>click anywhere on this screen first</strong>, then press spacebar</p></div>',
             choices: ['space'],
             on_start: function() {
-                console.log('Block start - press spacebar');
-                document.body.focus();
-                document.body.tabIndex = -1;
+                console.log('=== BLOCK START SCREEN ===');
+                console.log('Waiting for spacebar input...');
+                
+                // Force focus and add click handler
+                setTimeout(() => {
+                    document.body.focus();
+                    document.body.tabIndex = -1;
+                    console.log('Applied focus to document');
+                }, 100);
+                
+                // Add click listener to help with focus
+                var clickHandler = function() {
+                    console.log('Document clicked - keyboard should work now');
+                    document.body.focus();
+                    document.removeEventListener('click', clickHandler);
+                };
+                document.addEventListener('click', clickHandler);
+                
+                // Add direct keydown listener for debugging
+                var keyHandler = function(e) {
+                    console.log('Raw keydown detected:', e.key, e.code, e.which);
+                    document.removeEventListener('keydown', keyHandler);
+                };
+                document.addEventListener('keydown', keyHandler);
+            },
+            on_finish: function(data) {
+                console.log('=== SPACEBAR DETECTED ===');
+                console.log('Key pressed:', data.response);
+                console.log('Moving to next phase...');
             }
         };
 
@@ -443,6 +469,19 @@
             on_start: function() {
                 createPhotodiodeBox();
                 console.log('CM experiment started in redirect mode');
+                
+                // Ensure the document has focus for keyboard events
+                setTimeout(() => {
+                    document.body.focus();
+                    document.body.tabIndex = -1;
+                    console.log('Document focus applied at startup');
+                }, 500);
+                
+                // Global click handler to maintain focus
+                document.addEventListener('click', function() {
+                    document.body.focus();
+                    console.log('Focus restored via click');
+                });
             },
             on_interaction_data_update: function(data) {
                 var interaction = data.event;
