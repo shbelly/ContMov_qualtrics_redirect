@@ -240,63 +240,57 @@
 
         var block_start = {
             type: 'html-keyboard-response',
-            stimulus: '<div style="text-align: center; padding: 50px;"><p style="font-size: 24px;">Press the <strong>spacebar</strong> to begin this block.</p><p style="font-size: 16px; color: #666;">If spacebar doesn\'t work, <strong>click anywhere on this screen first</strong>, then press spacebar</p></div>',
-            choices: jsPsych.ALL_KEYS, // Accept any key, not just space
+            stimulus: '<div style="text-align: center; padding: 50px;"><p style="font-size: 24px;">Press <strong>ANY KEY</strong> to begin this block.</p><p style="font-size: 16px; color: #666;">Click anywhere on this screen first, then press any key</p></div>',
+            choices: jsPsych.ALL_KEYS,
             on_start: function() {
                 console.log('=== BLOCK START SCREEN ===');
                 console.log('Waiting for ANY keyboard input...');
                 
-                // Force focus and add click handler
+                // Force focus
                 setTimeout(() => {
                     document.body.focus();
                     document.body.tabIndex = -1;
-                    
-                    // Also try focusing on the jsPsych display element
-                    var display = document.getElementById('jspsych-content');
-                    if (display) {
-                        display.focus();
-                        display.tabIndex = -1;
-                        console.log('Focused on jsPsych display element');
-                    }
-                    
                     console.log('Applied focus to document');
                 }, 100);
                 
-                // Add click listener to help with focus
+                // Add click listener
                 var clickHandler = function(e) {
                     console.log('Document clicked - keyboard should work now');
                     document.body.focus();
-                    
-                    // Try focusing on the clicked element
-                    if (e.target) {
-                        e.target.focus();
-                    }
-                    
-                    // Remove handler after first click
+                    e.target.focus();
                     document.removeEventListener('click', clickHandler);
                 };
                 document.addEventListener('click', clickHandler);
                 
-                // Add direct keydown listener for debugging AND manual handling
+                // AGGRESSIVE manual keyboard handling
                 var keyHandler = function(e) {
                     console.log('Raw keydown detected:', e.key, e.code, e.which);
+                    console.log('FORCING TRIAL END WITH ANY KEY');
                     
-                    // If it's spacebar, manually trigger jsPsych response
-                    if (e.code === 'Space' || e.key === ' ' || e.which === 32) {
-                        console.log('Manual spacebar detection - forcing trial end');
-                        document.removeEventListener('keydown', keyHandler);
-                        
-                        // Manually end the trial
-                        setTimeout(() => {
-                            jsPsych.finishTrial({response: 'space'});
-                        }, 100);
-                    }
+                    // Remove the listener first
+                    document.removeEventListener('keydown', keyHandler);
+                    
+                    // Force end the trial immediately
+                    jsPsych.finishTrial({
+                        response: e.key || e.code || 'unknown_key'
+                    });
                 };
                 document.addEventListener('keydown', keyHandler);
+                
+                // BACKUP: Auto-continue after 10 seconds if no key detected
+                setTimeout(() => {
+                    console.log('AUTO-CONTINUING after 10 seconds');
+                    try {
+                        document.removeEventListener('keydown', keyHandler);
+                        jsPsych.finishTrial({response: 'auto_continue'});
+                    } catch (e) {
+                        console.log('Auto-continue failed:', e);
+                    }
+                }, 10000);
             },
             on_finish: function(data) {
-                console.log('=== KEY DETECTED ===');
-                console.log('Key pressed:', data.response);
+                console.log('=== TRIAL ENDED ===');
+                console.log('Response:', data.response);
                 console.log('Moving to next phase...');
             }
         };
