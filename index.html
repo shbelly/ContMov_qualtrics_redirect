@@ -66,6 +66,146 @@
     <script>var myrng = new Math.seedrandom('continuous-movement_seed');</script>
     <script src="js/custom-continuous-movement-plugin.js"></script>
     
+    <!-- Window Size Monitoring -->
+    <script>
+        // Window size requirements
+        const MIN_WIDTH = 800;
+        const MIN_HEIGHT = 600;
+        
+        // Create warning overlay
+        function createSizeWarning() {
+            const warningDiv = document.createElement('div');
+            warningDiv.id = 'size-warning-overlay';
+            warningDiv.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.9);
+                color: white;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                z-index: 99999;
+                font-family: Arial, sans-serif;
+                text-align: center;
+                padding: 20px;
+                box-sizing: border-box;
+            `;
+            
+            warningDiv.innerHTML = `
+                <div style="max-width: 600px;">
+                    <h2 style="color: #ff6b6b; margin-bottom: 20px;">⚠️ Window Too Small</h2>
+                    <p style="font-size: 18px; margin-bottom: 15px;">
+                        Please expand your browser window to continue with the experiment.
+                    </p>
+                    <p style="font-size: 16px; margin-bottom: 20px;">
+                        <strong>Required:</strong> At least ${MIN_WIDTH} × ${MIN_HEIGHT} pixels<br>
+                        <strong>Current:</strong> <span id="current-size">${window.innerWidth} × ${window.innerHeight}</span> pixels
+                    </p>
+                    <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; margin: 20px 0;">
+                        <p style="margin: 0; font-size: 14px;">
+                            💡 <strong>Tips:</strong><br>
+                            • Press F11 for fullscreen mode<br>
+                            • Maximize your browser window<br>
+                            • Close other windows/tabs to free up space<br>
+                            • The page will automatically refresh when requirements are met
+                        </p>
+                    </div>
+                    <p style="font-size: 14px; color: #ccc;">
+                        This ensures the best experience for the experiment.
+                    </p>
+                </div>
+            `;
+            
+            document.body.appendChild(warningDiv);
+            return warningDiv;
+        }
+        
+        // Check window size and show/hide warning
+        function checkWindowSize() {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            const meetsRequirements = width >= MIN_WIDTH && height >= MIN_HEIGHT;
+            
+            let warningOverlay = document.getElementById('size-warning-overlay');
+            
+            if (!meetsRequirements) {
+                // Show warning if not already shown
+                if (!warningOverlay) {
+                    warningOverlay = createSizeWarning();
+                    console.log(`Window too small: ${width}×${height}, required: ${MIN_WIDTH}×${MIN_HEIGHT}`);
+                } else {
+                    // Update current size display
+                    const currentSizeSpan = document.getElementById('current-size');
+                    if (currentSizeSpan) {
+                        currentSizeSpan.textContent = `${width} × ${height}`;
+                    }
+                }
+            } else {
+                // Requirements met
+                if (warningOverlay) {
+                    console.log(`Window size OK: ${width}×${height}, requirements met!`);
+                    
+                    // Check if experiment has started
+                    const hasStarted = typeof jsPsych !== 'undefined' && jsPsych.data && jsPsych.data.get().count() > 0;
+                    
+                    if (hasStarted) {
+                        // Experiment in progress - refresh to restart properly
+                        console.log('Experiment was in progress, refreshing page...');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1000);
+                        
+                        // Show brief "refreshing" message
+                        warningOverlay.innerHTML = `
+                            <div style="max-width: 400px;">
+                                <h2 style="color: #4ecdc4; margin-bottom: 20px;">✅ Size Requirements Met!</h2>
+                                <p style="font-size: 18px;">Refreshing page to restart experiment...</p>
+                                <div style="margin-top: 20px;">
+                                    <div style="display: inline-block; width: 20px; height: 20px; border: 3px solid #f3f3f3; border-top: 3px solid #4ecdc4; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                                </div>
+                                <style>
+                                    @keyframes spin {
+                                        0% { transform: rotate(0deg); }
+                                        100% { transform: rotate(360deg); }
+                                    }
+                                </style>
+                            </div>
+                        `;
+                    } else {
+                        // Experiment hasn't started yet - just remove warning
+                        warningOverlay.remove();
+                    }
+                }
+            }
+            
+            return meetsRequirements;
+        }
+        
+        // Monitor window size changes
+        let resizeTimeout;
+        window.addEventListener('resize', function() {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(checkWindowSize, 100); // Debounce resize events
+        });
+        
+        // Initial check when page loads
+        window.addEventListener('load', function() {
+            setTimeout(checkWindowSize, 500); // Give page time to fully load
+        });
+        
+        // Also check immediately
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(checkWindowSize, 100);
+        });
+        
+        // Periodic check (backup)
+        setInterval(checkWindowSize, 2000);
+    </script>
+    
     <!-- System Information Collection -->
     <script>
         // Enhanced system information collection
@@ -958,6 +1098,12 @@
                 createPhotodiodeBox();
                 console.log('jsPsych experiment started');
                 
+                // Final window size check before starting
+                if (!checkWindowSize()) {
+                    console.log('Window size check failed at experiment start');
+                    return; // Don't start if window is too small
+                }
+                
                 // Record experiment start time
                 experiment_start_time = performance.now();
                 
@@ -1006,8 +1152,9 @@
                 }
             },
             exclusions: {
-                min_width: minWidth,
-                min_height: minHeight
+                // Remove automatic jsPsych exclusions since we handle it manually
+                // min_width: minWidth,
+                // min_height: minHeight
             },
             on_finish: function() {
                 console.log('=== EXPERIMENT COMPLETED ===');
