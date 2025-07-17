@@ -1,1 +1,290 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CM Task - Quick Test</title>
+    
+    <!-- jsPsych Library -->
+    <script src="js/jsPsych/jspsych.js"></script>
+    <script src="js/jsPsych/plugins/jspsych-instructions.js"></script>
+    <script src="js/jsPsych/plugins/jspsych-html-keyboard-response.js"></script>
+    <script src="js/jsPsych/plugins/jspsych-call-function.js"></script>
+    <script src="js/jsPsych/plugins/jspsych-fullscreen.js"></script>
+    <link href="js/jsPsych/css/jspsych.css" rel="stylesheet" type="text/css">
+    
+    <!-- Other Required Libraries -->
+    <script src="js/jquery-3.6.0.min.js"></script>
+    <script src="js/bowser.js"></script>
+    <script src="js/sprintf.js"></script>
+    <script src="js/rng.js"></script>
+    <script>var myrng = new Math.seedrandom('continuous-movement_seed');</script>
+    <script src="js/custom-continuous-movement-plugin.js"></script>
+</head>
 
+<body>
+    <div style="position: fixed; top: 10px; right: 10px; background: red; color: white; padding: 10px; z-index: 10000; border-radius: 5px;">
+        <strong>QUICK TEST MODE</strong><br>
+        Super fast for testing data transfer
+    </div>
+    
+    <script>
+        // ===== GET QUALTRICS PARAMETERS =====
+        function getUrlParameter(name) {
+            name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+            var regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+            var results = regex.exec(location.search);
+            return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+        }
+        
+        var qualtricsURL = getUrlParameter('Q_URL');
+        var responseID = getUrlParameter('ResponseId') || 'test_' + Date.now();
+        
+        console.log('=== QUICK TEST MODE ===');
+        console.log('Qualtrics URL:', qualtricsURL);
+        console.log('Response ID:', responseID);
+        
+        // ===== QUICK TEST CONFIGURATION =====
+        var pd = false;
+        
+        // Stimuli paths (will fallback if missing)
+        var fix_stim = 'images/fix.png';
+        var go_stim = ['images/go_stim1.png', 'images/go_stim2.png', 'images/go_stim3.png'];
+        var start_stim = 'images/start.png';
+        var stop_stim = 'images/stop.png';
+        var tone_stim = 'audio/tone.mp3';
+
+        // SUPER FAST SETTINGS FOR TESTING
+        let stop_prop = 0.5;
+        let n_trials_per_block = 2;  // Only 2 trials per block!
+        let n_practice_trials = 1;   // Only 1 practice trial!
+        var n_blocks_exp = 1;        // Only 1 experimental block!
+        var n_secs = [3, 2];         // Shorter countdowns
+        let t_stop_min = 0.2;
+        let t_stop_max = 1.0;
+
+        // FAST TIMING (everything in milliseconds)
+        let ITI = 500;     // Faster inter-trial interval
+        let FIX = 100;     // Faster fixation
+        let MAXRT = 500;   // Faster max RT
+        let iFBT = 200;    // Faster feedback
+        let bFBT = 1000;   // Much faster break (1 second instead of 15)
+
+        var fullscreen = false; // Disable fullscreen for quick testing
+        var minWidth = 400;
+        var minHeight = 300;
+
+        // ===== SIMPLIFIED MESSAGES =====
+        var welcome_message = ['<p><strong>QUICK TEST MODE</strong></p><p>This will complete in about 30 seconds.</p><p>Press "Next" to begin.</p>'];
+        var end_message = "<p><strong>Quick test complete!</strong></p><p>Redirecting with test data...</p>";
+
+        let page1 = [
+            "<p><strong>Quick Test Instructions</strong></p>" +
+            "<p>This is a shortened version to test data transfer.</p>" +
+            "<p>Just press any key when prompted and the test will complete quickly.</p>"
+        ];
+
+        // ===== VARIABLES =====
+        var timeline = [];
+        var trial_ind = 1;
+        var block_ind = 0;
+        var focus = 'focus';
+        var fullscr_ON = 'no';
+
+        // Generate test subject ID
+        var code = responseID + '_CM_TEST_' + Date.now();
+        jsPsych.data.addProperties({participantID: code});
+
+        // Preload stimuli (with fallback)
+        var pre_load_stimuli = []; // Skip preloading for quick test
+
+        // ===== SIMPLIFIED FUNCTIONS =====
+        function createPhotodiodeBox() {
+            console.log('Photodiode disabled for testing');
+        }
+        function hidePhotodiodeBox() {}
+        function showPhotodiodeBox() {}
+        function trigger_write(cmd) {
+            console.log('[TRIGGER]', cmd);
+        }
+
+        // ===== QUICK TEST TRIALS =====
+        var welcome = {
+            type: "instructions",
+            pages: welcome_message,
+            show_clickable_nav: true,
+            allow_backward: false,
+            button_label_next: "Start Quick Test"
+        };
+
+        var instructions = {
+            type: "instructions",
+            pages: [page1],
+            show_clickable_nav: true,
+            button_label_next: "Continue"
+        };
+
+        var quick_trial = {
+            type: 'html-keyboard-response',
+            stimulus: '<div style="text-align: center; padding: 50px;"><h2>Quick Test Trial</h2><p>Press ANY KEY to simulate task completion</p><p style="font-size: 14px; color: #666;">This simulates the movement task data</p></div>',
+            choices: jsPsych.ALL_KEYS,
+            on_finish: function(data) {
+                // Simulate realistic task data
+                data.trial_type_data = Math.random() > 0.5 ? 'go' : 'stop';
+                data.goRT = Math.random() * 300 + 200; // 200-500ms
+                data.RT = Math.random() * 200 + 100;   // 100-300ms
+                data.exclude = Math.random() > 0.8 ? 'too slow' : 'no';
+                
+                console.log('Simulated trial data:', data);
+            }
+        };
+
+        var block_start = {
+            type: 'html-keyboard-response',
+            stimulus: '<div style="text-align: center;"><h3>Block ' + (block_ind + 1) + '</h3><p>Press ANY KEY to start</p></div>',
+            choices: jsPsych.ALL_KEYS
+        };
+
+        var evaluate_end_if_practice = {
+            type: 'call-function',
+            func: function() {
+                if (block_ind == 0 && trial_ind > n_practice_trials) {
+                    jsPsych.endCurrentTimeline();
+                }
+            }
+        };
+
+        // ===== DATA FUNCTIONS =====
+        function sendDataToQualtrics() {
+            try {
+                console.log("=== QUICK TEST DATA GENERATION ===");
+                
+                // Generate realistic test data
+                const cmData = {
+                    // Required identifiers
+                    cm_subject_id: code,
+                    cm_experiment_duration: 25000, // ~25 seconds
+                    cm_blocks_completed: 2,
+                    
+                    // Trial counts
+                    cm_total_trials: 3,
+                    cm_go_trials: 2,
+                    cm_stop_trials: 1,
+                    cm_practice_trials: 1,
+                    cm_valid_trials: 2,
+                    cm_excluded_trials: 1,
+                    
+                    // Reaction times (milliseconds) - realistic test values
+                    cm_avg_go_rt: 342,
+                    cm_median_go_rt: 338,
+                    cm_min_go_rt: 298,
+                    cm_max_go_rt: 389,
+                    cm_avg_stop_rt: 156,
+                    cm_median_stop_rt: 156,
+                    cm_min_stop_rt: 134,
+                    cm_max_stop_rt: 178,
+                    
+                    // Browser/system information
+                    cm_fullscreen: fullscr_ON,
+                    cm_browser_name: navigator.userAgent.includes('Chrome') ? 'Chrome' : 'Other',
+                    cm_browser_version: 'Test',
+                    cm_os_name: navigator.platform || 'Test',
+                    cm_os_version: 'Test',
+                    cm_tablet: 'false',
+                    cm_mobile: 'false',
+                    cm_screen_resolution: screen.width + ' x ' + screen.height,
+                    cm_window_resolution: window.innerWidth + ' x ' + window.innerHeight
+                };
+
+                console.log("Quick test data generated:", cmData);
+                window.cmExperimentResults = cmData;
+                return cmData;
+
+            } catch (error) {
+                console.error("Quick test data generation error:", error);
+                return null;
+            }
+        }
+
+        function redirectToQualtrics() {
+            const cmData = sendDataToQualtrics();
+            
+            if (qualtricsURL && cmData) {
+                console.log('=== REDIRECTING WITH TEST DATA ===');
+                
+                var separator = qualtricsURL.includes('?') ? '&' : '?';
+                var dataParams = '';
+                
+                Object.keys(cmData).forEach(key => {
+                    dataParams += '&' + key + '=' + encodeURIComponent(cmData[key]);
+                });
+                
+                var finalURL = qualtricsURL + separator + dataParams.substring(1);
+                
+                console.log('Final test URL length:', finalURL.length);
+                console.log('Test data in URL:', dataParams.substring(0, 200) + '...');
+                
+                // Show preview before redirect
+                document.body.innerHTML = `
+                    <div style="text-align: center; padding: 20px; font-family: Arial;">
+                        <h2>✅ Quick Test Complete!</h2>
+                        <p><strong>Data generated successfully</strong></p>
+                        <div style="background: #f0f0f0; padding: 15px; margin: 20px; border-radius: 5px;">
+                            <h3>Sample Data Generated:</h3>
+                            <p>cm_total_trials: ${cmData.cm_total_trials}</p>
+                            <p>cm_avg_go_rt: ${cmData.cm_avg_go_rt}ms</p>
+                            <p>cm_browser_name: ${cmData.cm_browser_name}</p>
+                            <p>... and ${Object.keys(cmData).length} total fields</p>
+                        </div>
+                        <p>Redirecting to Qualtrics in 3 seconds...</p>
+                        <button onclick="window.location.href='${finalURL}'" style="padding: 10px 20px; font-size: 16px; background: #007ACC; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                            Redirect Now
+                        </button>
+                    </div>
+                `;
+                
+                setTimeout(() => {
+                    window.location.href = finalURL;
+                }, 3000);
+                
+            } else {
+                document.body.innerHTML = '<div style="text-align: center; padding: 50px;"><h2>❌ Test Failed</h2><p>No Qualtrics URL provided</p></div>';
+            }
+        }
+
+        var goodbye = {
+            type: "html-keyboard-response",
+            stimulus: end_message,
+            choices: jsPsych.NO_KEYS,
+            trial_duration: 2000,
+            on_finish: function() {
+                redirectToQualtrics();
+            }
+        };
+
+        // ===== QUICK TIMELINE =====
+        var trial_procedure = {
+            timeline: [quick_trial, evaluate_end_if_practice],
+            repetitions: 3  // Just 3 quick trials
+        };
+
+        var block_procedure = {
+            timeline: [block_start, trial_procedure],
+            repetitions: 2  // 2 quick blocks
+        };
+
+        timeline = [welcome, instructions, block_procedure, goodbye];
+
+        // ===== START QUICK TEST =====
+        jsPsych.init({
+            timeline: timeline,
+            on_start: function() {
+                console.log('=== QUICK TEST STARTED ===');
+                console.log('This will complete in about 30 seconds');
+            },
+            on_finish: function() {
+                console.log('=== QUICK TEST FINISHED ===');
+                setTimeout(redirectToQualtrics, 500);
+            }
+        });
+    </script>
+</body>
+</html>
