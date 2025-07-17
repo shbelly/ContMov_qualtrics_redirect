@@ -52,11 +52,11 @@
         var stop_stim = 'images/stop.png';
         var tone_stim = 'audio/tone.mp3';
 
-        // Experiment design
+        // Experiment design - SHORTENED for 7 minutes
         let stop_prop = 0.4;
-        let n_trials_per_block = 30;
-        let n_practice_trials = 13;
-        var n_blocks_exp = 6;
+        let n_trials_per_block = 20; // Reduced from 30
+        let n_practice_trials = 8;   // Reduced from 13
+        var n_blocks_exp = 2;        // Reduced from 6
         var n_secs = [5, 4, 3];
         let t_stop_min = 0.5;
         let t_stop_max = 2.5;
@@ -95,7 +95,7 @@
             'there will be a 15 second break. During this break, we will show you some information about ' +
             'your mean performance in the previous block.</p>' +
             '<p>The experiment consists of 1 practice block and ' + n_blocks_exp +
-            ' experimental blocks.</p>'
+            ' experimental blocks. <strong>Total time: approximately 7 minutes.</strong></p>'
         ];
 
         // Feedback messages
@@ -425,17 +425,126 @@
         };
 
         function redirectToQualtrics() {
-            if (qualtricsURL) {
-                console.log('Redirecting to Qualtrics:', qualtricsURL);
+            // Calculate and send data via URL parameters (most reliable method)
+            const cmData = sendDataToQualtrics();
+            
+            if (qualtricsURL && cmData) {
+                console.log('Redirecting to Qualtrics with data:', qualtricsURL);
                 
-                // Add data parameters to URL
+                // Add ALL data as URL parameters
                 var separator = qualtricsURL.includes('?') ? '&' : '?';
-                var dataParams = 'cm_completed=1&cm_subject_id=' + encodeURIComponent(code);
+                var dataParams = '';
                 
-                window.location.href = qualtricsURL + separator + dataParams;
+                // Add each data field as URL parameter
+                Object.keys(cmData).forEach(key => {
+                    dataParams += '&' + key + '=' + encodeURIComponent(cmData[key]);
+                });
+                
+                var finalURL = qualtricsURL + separator + dataParams.substring(1); // Remove first &
+                
+                console.log('Final redirect URL length:', finalURL.length);
+                console.log('Redirecting to:', finalURL.substring(0, 200) + '...');
+                
+                window.location.href = finalURL;
             } else {
-                console.log('No Qualtrics URL provided');
+                console.log('No Qualtrics URL provided or no data available');
                 document.body.innerHTML = '<div style="text-align: center; padding: 50px;"><h2>Task Complete!</h2><p>No return URL was provided. You can close this window.</p></div>';
+            }
+        }
+
+        function sendDataToQualtrics() {
+            try {
+                console.log("=== SENDING SPECIFIED DATA TO QUALTRICS ===");
+                
+                const experimentStartTime = jsPsych.data.get().values()[0]?.time_elapsed || 0;
+                const experimentEndTime = jsPsych.data.get().last(1).values()[0]?.time_elapsed || 0;
+                const experimentDuration = experimentEndTime - experimentStartTime;
+                
+                const allData = jsPsych.data.get().values();
+                const trialData = allData.filter(trial => 
+                    trial.trial_type_data && (trial.trial_type_data === 'go' || trial.trial_type_data === 'stop')
+                );
+                
+                const practiceData = trialData.filter(t => t.block_ind === 0 || block_ind === 0);
+                const goTrials = trialData.filter(t => t.trial_type_data === 'go');
+                const stopTrials = trialData.filter(t => t.trial_type_data === 'stop');
+                const validTrials = trialData.filter(t => !t.exclude || t.exclude === 'no' || t.exclude === '');
+                const excludedTrials = trialData.filter(t => t.exclude && t.exclude !== 'no' && t.exclude !== '');
+                
+                // Go RT calculations
+                const goRTs = goTrials.filter(t => t.goRT && t.goRT > 0).map(t => t.goRT);
+                const avgGoRT = goRTs.length > 0 ? goRTs.reduce((sum, rt) => sum + rt, 0) / goRTs.length : 0;
+                const medianGoRT = goRTs.length > 0 ? goRTs.sort((a, b) => a - b)[Math.floor(goRTs.length / 2)] : 0;
+                const minGoRT = goRTs.length > 0 ? Math.min(...goRTs) : 0;
+                const maxGoRT = goRTs.length > 0 ? Math.max(...goRTs) : 0;
+                
+                // Stop RT calculations
+                const stopRTs = stopTrials.filter(t => t.RT && t.RT > 0).map(t => t.RT);
+                const avgStopRT = stopRTs.length > 0 ? stopRTs.reduce((sum, rt) => sum + rt, 0) / stopRTs.length : 0;
+                const medianStopRT = stopRTs.length > 0 ? stopRTs.sort((a, b) => a - b)[Math.floor(stopRTs.length / 2)] : 0;
+                const minStopRT = stopRTs.length > 0 ? Math.min(...stopRTs) : 0;
+                const maxStopRT = stopRTs.length > 0 ? Math.max(...stopRTs) : 0;
+                
+                // Browser/system info
+                const browserInfo = typeof bowser !== 'undefined' ? bowser : {
+                    name: navigator.userAgent.includes('Chrome') ? 'Chrome' : 
+                          navigator.userAgent.includes('Firefox') ? 'Firefox' : 
+                          navigator.userAgent.includes('Safari') ? 'Safari' : 'Unknown',
+                    version: 'Unknown',
+                    osname: navigator.platform || 'Unknown',
+                    os_version: 'Unknown',
+                    tablet: /tablet|ipad/i.test(navigator.userAgent),
+                    mobile: /mobile|android|iphone/i.test(navigator.userAgent)
+                };
+                
+                const cmData = {
+                    // Required identifiers
+                    cm_subject_id: code,
+                    cm_experiment_duration: experimentDuration,
+                    cm_blocks_completed: block_ind,
+                    
+                    // Trial counts
+                    cm_total_trials: trialData.length,
+                    cm_go_trials: goTrials.length,
+                    cm_stop_trials: stopTrials.length,
+                    cm_practice_trials: practiceData.length,
+                    cm_valid_trials: validTrials.length,
+                    cm_excluded_trials: excludedTrials.length,
+                    
+                    // Reaction times (milliseconds)
+                    cm_avg_go_rt: Math.round(avgGoRT),
+                    cm_median_go_rt: Math.round(medianGoRT),
+                    cm_min_go_rt: Math.round(minGoRT),
+                    cm_max_go_rt: Math.round(maxGoRT),
+                    cm_avg_stop_rt: Math.round(avgStopRT),
+                    cm_median_stop_rt: Math.round(medianStopRT),
+                    cm_min_stop_rt: Math.round(minStopRT),
+                    cm_max_stop_rt: Math.round(maxStopRT),
+                    
+                    // Browser/system information
+                    cm_fullscreen: fullscr_ON,
+                    cm_browser_name: browserInfo.name,
+                    cm_browser_version: browserInfo.version,
+                    cm_os_name: browserInfo.osname,
+                    cm_os_version: browserInfo.os_version,
+                    cm_tablet: String(browserInfo.tablet),
+                    cm_mobile: String(browserInfo.mobile),
+                    cm_screen_resolution: screen.width + ' x ' + screen.height,
+                    cm_window_resolution: window.innerWidth + ' x ' + window.innerHeight
+                };
+
+                console.log("Specified data calculated:", cmData);
+
+                // Store data for URL transfer
+                window.cmExperimentResults = cmData;
+                console.log("Data stored in window object");
+
+                console.log("=== DATA PREPARED FOR URL TRANSFER ===");
+                return cmData;
+
+            } catch (error) {
+                console.error("Data transmission error:", error);
+                return null;
             }
         }
 
