@@ -425,33 +425,92 @@
         };
 
         function redirectToQualtrics() {
-            // Calculate and send data via URL parameters (most reliable method)
+            // Store data in browser localStorage instead of redirecting
             const cmData = sendDataToQualtrics();
             
-            if (qualtricsURL && cmData) {
-                console.log('Redirecting to Qualtrics with data:', qualtricsURL);
+            if (cmData) {
+                console.log('=== STORING DATA IN BROWSER STORAGE ===');
                 
-                // Parse the original Qualtrics URL to preserve all existing parameters
-                const url = new URL(qualtricsURL);
-                
-                // Add ALL CM data as URL parameters while preserving existing ones
-                Object.keys(cmData).forEach(key => {
-                    url.searchParams.set(key, cmData[key]);
-                });
-                
-                // Ensure cm_completed is set
-                url.searchParams.set('cm_completed', '1');
-                
-                const finalURL = url.toString();
-                
-                console.log('Final redirect URL length:', finalURL.length);
-                console.log('Redirecting to:', finalURL.substring(0, 200) + '...');
-                console.log('CM data fields added:', Object.keys(cmData).length);
-                
-                window.location.href = finalURL;
+                try {
+                    // Store completion flag and data in localStorage
+                    localStorage.setItem('cm_task_completed_' + responseID, 'true');
+                    localStorage.setItem('cm_task_data_' + responseID, JSON.stringify(cmData));
+                    
+                    console.log('Data stored successfully in localStorage');
+                    console.log('Completion key:', 'cm_task_completed_' + responseID);
+                    console.log('Data key:', 'cm_task_data_' + responseID);
+                    
+                    // Show completion message
+                    document.body.innerHTML = `
+                        <div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
+                            <h2 style="color: #28a745;">✅ Task Complete!</h2>
+                            <p style="font-size: 18px; margin: 20px 0;">
+                                Your data has been saved successfully.
+                            </p>
+                            <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin: 20px auto; max-width: 600px;">
+                                <h3 style="color: #333; margin-top: 0;">Data Summary:</h3>
+                                <p><strong>Total Trials:</strong> ${cmData.cm_total_trials}</p>
+                                <p><strong>Average Go RT:</strong> ${cmData.cm_avg_go_rt}ms</p>
+                                <p><strong>Blocks Completed:</strong> ${cmData.cm_blocks_completed}</p>
+                                <p><strong>Browser:</strong> ${cmData.cm_browser_name}</p>
+                            </div>
+                            <div style="background: #d1ecf1; border: 1px solid #bee5eb; border-radius: 8px; padding: 15px; margin: 20px auto; max-width: 600px;">
+                                <p style="margin: 0; color: #0c5460;">
+                                    <strong>Next Steps:</strong><br>
+                                    1. Return to the survey tab<br>
+                                    2. The page will automatically refresh<br>
+                                    3. Click "Next" to continue the survey
+                                </p>
+                            </div>
+                            <button onclick="window.close()" style="padding: 12px 24px; font-size: 16px; background: #007ACC; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 10px;">
+                                Close This Tab
+                            </button>
+                            <button onclick="returnToSurvey()" style="padding: 12px 24px; font-size: 16px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 10px;">
+                                Return to Survey
+                            </button>
+                        </div>
+                    `;
+                    
+                    // Add function to return to survey (if opened from same domain)
+                    window.returnToSurvey = function() {
+                        try {
+                            if (window.opener && !window.opener.closed) {
+                                window.opener.location.reload();
+                                window.close();
+                            } else {
+                                alert('Please return to the survey tab manually and refresh the page.');
+                            }
+                        } catch (e) {
+                            alert('Please return to the survey tab manually and refresh the page.');
+                        }
+                    };
+                    
+                    // Auto-close after 30 seconds if user doesn't act
+                    setTimeout(() => {
+                        if (confirm('Auto-closing in 5 seconds. Return to survey tab now.\n\nClick OK to close immediately, or Cancel to keep this tab open.')) {
+                            window.close();
+                        }
+                    }, 25000);
+                    
+                } catch (error) {
+                    console.error('Error storing data:', error);
+                    document.body.innerHTML = `
+                        <div style="text-align: center; padding: 50px;">
+                            <h2 style="color: #dc3545;">❌ Storage Error</h2>
+                            <p>There was an error saving your data:</p>
+                            <p style="background: #f8d7da; padding: 10px; border-radius: 5px; color: #721c24;">${error.message}</p>
+                            <p>Please contact the researcher.</p>
+                        </div>
+                    `;
+                }
             } else {
-                console.log('No Qualtrics URL provided or no data available');
-                document.body.innerHTML = '<div style="text-align: center; padding: 50px;"><h2>Task Complete!</h2><p>No return URL was provided. You can close this window.</p></div>';
+                console.log('No data available to store');
+                document.body.innerHTML = `
+                    <div style="text-align: center; padding: 50px;">
+                        <h2 style="color: #dc3545;">❌ No Data Available</h2>
+                        <p>No task data was generated. Please contact the researcher.</p>
+                    </div>
+                `;
             }
         }
 
