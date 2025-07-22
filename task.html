@@ -70,10 +70,10 @@
         let iFBT = 750;
         let bFBT = 15000;
 
-        // Screen settings - force fullscreen
-        var fullscreen = true;
-        var minWidth = 800;
-        var minHeight = 600;
+        // Screen settings - adjust for embedded mode
+        var fullscreen = !embeddedMode; // Disable fullscreen in embedded mode
+        var minWidth = embeddedMode ? 400 : 800;  // Smaller requirements when embedded
+        var minHeight = embeddedMode ? 300 : 600;
 
         // Disable local redirection - we'll redirect to Qualtrics
         var redirect_onCompletion = false;
@@ -642,7 +642,14 @@
         };
 
         // ===== BUILD TIMELINE =====
-        var start_timeline = [welcome, fullscr, instructions];
+        // Conditional timeline based on embedded mode
+        var start_timeline;
+        if (embeddedMode) {
+            // Skip fullscreen for embedded mode
+            start_timeline = [welcome, instructions];
+        } else {
+            start_timeline = [welcome, fullscr, instructions];
+        }
 
         var start_procedure = {
             timeline: start_timeline,
@@ -661,9 +668,17 @@
             repetitions: n_blocks_exp + 1,
         };
 
-        var end_procedure = {
-            timeline: [fullscr_off, goodbye],
-        };
+        var end_procedure;
+        if (embeddedMode) {
+            // Skip fullscreen exit for embedded mode
+            end_procedure = {
+                timeline: [goodbye],
+            };
+        } else {
+            end_procedure = {
+                timeline: [fullscr_off, goodbye],
+            };
+        }
 
         timeline.push(start_procedure, block_procedure, end_procedure);
 
