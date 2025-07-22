@@ -34,10 +34,12 @@
         var qualtricsURL = getUrlParameter('Q_URL');
         var responseID = getUrlParameter('ResponseId') || getUrlParameter('PROLIFIC_PID') || 'unknown';
         var surveyID = getUrlParameter('SID') || 'unknown';
+        var embeddedMode = getUrlParameter('embedded') === 'true';
         
         console.log('Qualtrics URL:', qualtricsURL);
         console.log('Response ID:', responseID);
         console.log('Survey ID:', surveyID);
+        console.log('Embedded Mode:', embeddedMode);
         
         // ===== TASK CONFIGURATION =====
         var pd = false;  // Disable photodiode for online use
@@ -113,7 +115,7 @@
         var welcome_message = ['<p>Welcome to the Continuous Movement Task.</p><p>Press "Next" to begin.</p>'];
         var text_at_start_block = '<p>Press the <strong>spacebar</strong> to begin this block.</p>';
         var get_ready_message = '<p>Get ready...</p>';
-        var end_message = "<p>Thank you for completing the Continuous Movement Task!</p><p>You will be redirected back to the survey in a moment...</p>";
+        var end_message = "<p>Thank you for completing the Continuous Movement Task!</p><p>Processing your data...</p>";
 
         // ===== VARIABLES =====
         var timeline = [];
@@ -186,6 +188,54 @@
 
         function trigger_write(cmd) {
             console.log('[TRIGGER]', cmd);
+        }
+
+        // ===== HELPER FUNCTIONS FOR DATA PROCESSING =====
+        function calculateMedian(values) {
+            if (values.length === 0) return 0;
+            const sorted = values.slice().sort((a, b) => a - b);
+            const middle = Math.floor(sorted.length / 2);
+            return sorted.length % 2 === 0 
+                ? (sorted[middle - 1] + sorted[middle]) / 2 
+                : sorted[middle];
+        }
+
+        function getBrowserInfo() {
+            const userAgent = navigator.userAgent;
+            
+            // Simple browser detection
+            let browser = 'unknown';
+            let version = 'unknown';
+            
+            if (userAgent.includes('Chrome')) {
+                browser = 'Chrome';
+                const match = userAgent.match(/Chrome\/(\d+)/);
+                version = match ? match[1] : 'unknown';
+            } else if (userAgent.includes('Firefox')) {
+                browser = 'Firefox';
+                const match = userAgent.match(/Firefox\/(\d+)/);
+                version = match ? match[1] : 'unknown';
+            } else if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) {
+                browser = 'Safari';
+                const match = userAgent.match(/Safari\/(\d+)/);
+                version = match ? match[1] : 'unknown';
+            }
+            
+            // Simple OS detection
+            let os = 'unknown';
+            if (userAgent.includes('Windows')) os = 'Windows';
+            else if (userAgent.includes('Mac')) os = 'macOS';
+            else if (userAgent.includes('Linux')) os = 'Linux';
+            else if (userAgent.includes('Android')) os = 'Android';
+            else if (userAgent.includes('iOS')) os = 'iOS';
+            
+            return {
+                browser: browser,
+                version: version,
+                os: os,
+                mobile: /Mobile|Android|iPhone|iPad/.test(userAgent),
+                tablet: /iPad|Android.*Tablet/.test(userAgent)
+            };
         }
 
         // ===== TRIAL DEFINITIONS =====
@@ -316,7 +366,7 @@
             on_start: function(data) {  
                 trigger_write(10);
                 fix_time = performance.now();
-                start_time = performance.now();
+                if (!start_time) start_time = performance.now();
             },
             on_finish: function(data) {
                 trial_type = data.trial_type_data || data.trial_type;
@@ -424,8 +474,104 @@
             }
         };
 
+        function sendDataToQualtrics() {
+            try {
+                console.log("=== CM EXPERIMENT DATA ===");
+                
+                const allData = jsPsych.data.get().values();
+                const trialData = allData.filter(trial => 
+                    trial.trial_type_data && (trial.trial_type_data === 'go' || trial.trial_type_data === 'stop')
+                );
+                
+                const totalTrials = trialData.length;
+                const goTrials = trialData.filter(t => t.trial_type_data === 'go');
+                const stopTrials = trialData.filter(t => t.trial_type_data === 'stop');
+                
+                const validGoTrials = goTrials.filter(t => t.goRT);
+                const validStopTrials = stopTrials.filter(t => t.RT);
+                
+                const avgGoRT = validGoTrials.length > 0 ? 
+                    validGoTrials.reduce((sum, t) => sum + t.goRT, 0) / validGoTrials.length : 0;
+                
+                const avgStopRT = validStopTrials.length > 0 ? 
+                    validStopTrials.reduce((sum, t) => sum + t.RT, 0) / validStopTrials.length : 0;
+                
+                const excludedTrials = trialData.filter(t => t.exclude && t.exclude !== '' && t.exclude !== 'no').length;
+                const validTrials = totalTrials - excludedTrials;
+                
+                // Get browser and system info
+                const browserInfo = getBrowserInfo();
+                
+                const cmData = {
+                    cm_subject_id: code,
+                    cm_experiment_duration: Math.round((performance.now() - start_time) / 1000), // in seconds
+                    cm_blocks_completed: block_ind,
+                    cm_total_trials: totalTrials,
+                    cm_go_trials: goTrials.length,
+                    cm_stop_trials: stopTrials.length,
+                    cm_practice_trials: n_practice_trials,
+                    cm_valid_trials: validTrials,
+                    cm_excluded_trials: excludedTrials,
+                    cm_avg_go_rt: Math.round(avgGoRT),
+                    cm_median_go_rt: Math.round(calculateMedian(validGoTrials.map(t => t.goRT))),
+                    cm_min_go_rt: validGoTrials.length > 0 ? Math.min(...validGoTrials.map(t => t.goRT)) : 0,
+                    cm_max_go_rt: validGoTrials.length > 0 ? Math.max(...validGoTrials.map(t => t.goRT)) : 0,
+                    cm_avg_stop_rt: Math.round(avgStopRT),
+                    cm_median_stop_rt: Math.round(calculateMedian(validStopTrials.map(t => t.RT))),
+                    cm_min_stop_rt: validStopTrials.length > 0 ? Math.min(...validStopTrials.map(t => t.RT)) : 0,
+                    cm_max_stop_rt: validStopTrials.length > 0 ? Math.max(...validStopTrials.map(t => t.RT)) : 0,
+                    cm_fullscreen: fullscr_ON === 'yes' ? 1 : 0,
+                    cm_browser_name: browserInfo.browser || 'unknown',
+                    cm_browser_version: browserInfo.version || 'unknown',
+                    cm_os_name: browserInfo.os || 'unknown',
+                    cm_os_version: browserInfo.osVersion || 'unknown',
+                    cm_tablet: browserInfo.tablet ? 1 : 0,
+                    cm_mobile: browserInfo.mobile ? 1 : 0,
+                    cm_screen_resolution: screen.width + 'x' + screen.height,
+                    cm_window_resolution: window.innerWidth + 'x' + window.innerHeight
+                };
+
+                console.log("Sending completion data:", cmData);
+
+                // If running in embedded mode (iframe), send completion message to parent (Qualtrics)
+                if (embeddedMode && window.parent !== window) {
+                    window.parent.postMessage({
+                        type: 'CM_TASK_COMPLETE',
+                        data: cmData
+                    }, '*');
+                    console.log("Completion message sent to parent window (Qualtrics)");
+                    return cmData;
+                } else {
+                    // Old behavior for redirect mode
+                    console.log("Running in redirect mode - storing data in localStorage");
+                    return cmData;
+                }
+
+            } catch (error) {
+                console.error("Data transfer error:", error);
+                
+                // Send minimal completion signal even if data processing fails
+                if (embeddedMode && window.parent !== window) {
+                    window.parent.postMessage({
+                        type: 'CM_TASK_COMPLETE',
+                        data: { cm_task_completed: true, cm_error: 'data_processing_failed' }
+                    }, '*');
+                }
+                return null;
+            }
+        }
+
         function redirectToQualtrics() {
-            // Store data in browser localStorage instead of redirecting
+            // Handle both embedded and redirect modes
+            if (embeddedMode) {
+                console.log('=== EMBEDDED MODE COMPLETION ===');
+                // Data was already sent in sendDataToQualtrics()
+                // Just show completion message
+                document.body.innerHTML = '<div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;"><h2 style="color: #28a745;">Task Complete!</h2><p style="font-size: 18px; margin: 20px 0;">Your data has been saved successfully.</p><p style="color: #666;">You can now continue with the survey.</p></div>';
+                return;
+            }
+            
+            // Original redirect mode behavior
             const cmData = sendDataToQualtrics();
             
             if (cmData) {
@@ -441,35 +587,7 @@
                     console.log('Data key:', 'cm_task_data_' + responseID);
                     
                     // Show completion message
-                    document.body.innerHTML = `
-                        <div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
-                            <h2 style="color: #28a745;">✅ Task Complete!</h2>
-                            <p style="font-size: 18px; margin: 20px 0;">
-                                Your data has been saved successfully.
-                            </p>
-                            <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin: 20px auto; max-width: 600px;">
-                                <h3 style="color: #333; margin-top: 0;">Data Summary:</h3>
-                                <p><strong>Total Trials:</strong> ${cmData.cm_total_trials}</p>
-                                <p><strong>Average Go RT:</strong> ${cmData.cm_avg_go_rt}ms</p>
-                                <p><strong>Blocks Completed:</strong> ${cmData.cm_blocks_completed}</p>
-                                <p><strong>Browser:</strong> ${cmData.cm_browser_name}</p>
-                            </div>
-                            <div style="background: #d1ecf1; border: 1px solid #bee5eb; border-radius: 8px; padding: 15px; margin: 20px auto; max-width: 600px;">
-                                <p style="margin: 0; color: #0c5460;">
-                                    <strong>Next Steps:</strong><br>
-                                    1. Return to the survey tab<br>
-                                    2. The page will automatically refresh<br>
-                                    3. Click "Next" to continue the survey
-                                </p>
-                            </div>
-                            <button onclick="window.close()" style="padding: 12px 24px; font-size: 16px; background: #007ACC; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 10px;">
-                                Close This Tab
-                            </button>
-                            <button onclick="returnToSurvey()" style="padding: 12px 24px; font-size: 16px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 10px;">
-                                Return to Survey
-                            </button>
-                        </div>
-                    `;
+                    document.body.innerHTML = '<div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;"><h2 style="color: #28a745;">Task Complete!</h2><p style="font-size: 18px; margin: 20px 0;">Your data has been saved successfully.</p><div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin: 20px auto; max-width: 600px;"><h3 style="color: #333; margin-top: 0;">Data Summary:</h3><p><strong>Total Trials:</strong> ' + cmData.cm_total_trials + '</p><p><strong>Average Go RT:</strong> ' + cmData.cm_avg_go_rt + 'ms</p><p><strong>Blocks Completed:</strong> ' + cmData.cm_blocks_completed + '</p><p><strong>Browser:</strong> ' + cmData.cm_browser_name + '</p></div><div style="background: #d1ecf1; border: 1px solid #bee5eb; border-radius: 8px; padding: 15px; margin: 20px auto; max-width: 600px;"><p style="margin: 0; color: #0c5460;"><strong>Next Steps:</strong><br>1. Return to the survey tab<br>2. The page will automatically refresh<br>3. Click "Next" to continue the survey</p></div><button onclick="window.close()" style="padding: 12px 24px; font-size: 16px; background: #007ACC; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 10px;">Close This Tab</button><button onclick="returnToSurvey()" style="padding: 12px 24px; font-size: 16px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 10px;">Return to Survey</button></div>';
                     
                     // Add function to return to survey (if opened from same domain)
                     window.returnToSurvey = function() {
@@ -494,119 +612,11 @@
                     
                 } catch (error) {
                     console.error('Error storing data:', error);
-                    document.body.innerHTML = `
-                        <div style="text-align: center; padding: 50px;">
-                            <h2 style="color: #dc3545;">❌ Storage Error</h2>
-                            <p>There was an error saving your data:</p>
-                            <p style="background: #f8d7da; padding: 10px; border-radius: 5px; color: #721c24;">${error.message}</p>
-                            <p>Please contact the researcher.</p>
-                        </div>
-                    `;
+                    document.body.innerHTML = '<div style="text-align: center; padding: 50px;"><h2 style="color: #dc3545;">Storage Error</h2><p>There was an error saving your data:</p><p style="background: #f8d7da; padding: 10px; border-radius: 5px; color: #721c24;">' + error.message + '</p><p>Please contact the researcher.</p></div>';
                 }
             } else {
                 console.log('No data available to store');
-                document.body.innerHTML = `
-                    <div style="text-align: center; padding: 50px;">
-                        <h2 style="color: #dc3545;">❌ No Data Available</h2>
-                        <p>No task data was generated. Please contact the researcher.</p>
-                    </div>
-                `;
-            }
-        }
-
-        function sendDataToQualtrics() {
-            try {
-                console.log("=== SENDING SPECIFIED DATA TO QUALTRICS ===");
-                
-                const experimentStartTime = jsPsych.data.get().values()[0]?.time_elapsed || 0;
-                const experimentEndTime = jsPsych.data.get().last(1).values()[0]?.time_elapsed || 0;
-                const experimentDuration = experimentEndTime - experimentStartTime;
-                
-                const allData = jsPsych.data.get().values();
-                const trialData = allData.filter(trial => 
-                    trial.trial_type_data && (trial.trial_type_data === 'go' || trial.trial_type_data === 'stop')
-                );
-                
-                const practiceData = trialData.filter(t => t.block_ind === 0 || block_ind === 0);
-                const goTrials = trialData.filter(t => t.trial_type_data === 'go');
-                const stopTrials = trialData.filter(t => t.trial_type_data === 'stop');
-                const validTrials = trialData.filter(t => !t.exclude || t.exclude === 'no' || t.exclude === '');
-                const excludedTrials = trialData.filter(t => t.exclude && t.exclude !== 'no' && t.exclude !== '');
-                
-                // Go RT calculations
-                const goRTs = goTrials.filter(t => t.goRT && t.goRT > 0).map(t => t.goRT);
-                const avgGoRT = goRTs.length > 0 ? goRTs.reduce((sum, rt) => sum + rt, 0) / goRTs.length : 0;
-                const medianGoRT = goRTs.length > 0 ? goRTs.sort((a, b) => a - b)[Math.floor(goRTs.length / 2)] : 0;
-                const minGoRT = goRTs.length > 0 ? Math.min(...goRTs) : 0;
-                const maxGoRT = goRTs.length > 0 ? Math.max(...goRTs) : 0;
-                
-                // Stop RT calculations
-                const stopRTs = stopTrials.filter(t => t.RT && t.RT > 0).map(t => t.RT);
-                const avgStopRT = stopRTs.length > 0 ? stopRTs.reduce((sum, rt) => sum + rt, 0) / stopRTs.length : 0;
-                const medianStopRT = stopRTs.length > 0 ? stopRTs.sort((a, b) => a - b)[Math.floor(stopRTs.length / 2)] : 0;
-                const minStopRT = stopRTs.length > 0 ? Math.min(...stopRTs) : 0;
-                const maxStopRT = stopRTs.length > 0 ? Math.max(...stopRTs) : 0;
-                
-                // Browser/system info
-                const browserInfo = typeof bowser !== 'undefined' ? bowser : {
-                    name: navigator.userAgent.includes('Chrome') ? 'Chrome' : 
-                          navigator.userAgent.includes('Firefox') ? 'Firefox' : 
-                          navigator.userAgent.includes('Safari') ? 'Safari' : 'Unknown',
-                    version: 'Unknown',
-                    osname: navigator.platform || 'Unknown',
-                    os_version: 'Unknown',
-                    tablet: /tablet|ipad/i.test(navigator.userAgent),
-                    mobile: /mobile|android|iphone/i.test(navigator.userAgent)
-                };
-                
-                const cmData = {
-                    // Required identifiers
-                    cm_subject_id: code,
-                    cm_experiment_duration: experimentDuration,
-                    cm_blocks_completed: block_ind,
-                    
-                    // Trial counts
-                    cm_total_trials: trialData.length,
-                    cm_go_trials: goTrials.length,
-                    cm_stop_trials: stopTrials.length,
-                    cm_practice_trials: practiceData.length,
-                    cm_valid_trials: validTrials.length,
-                    cm_excluded_trials: excludedTrials.length,
-                    
-                    // Reaction times (milliseconds)
-                    cm_avg_go_rt: Math.round(avgGoRT),
-                    cm_median_go_rt: Math.round(medianGoRT),
-                    cm_min_go_rt: Math.round(minGoRT),
-                    cm_max_go_rt: Math.round(maxGoRT),
-                    cm_avg_stop_rt: Math.round(avgStopRT),
-                    cm_median_stop_rt: Math.round(medianStopRT),
-                    cm_min_stop_rt: Math.round(minStopRT),
-                    cm_max_stop_rt: Math.round(maxStopRT),
-                    
-                    // Browser/system information
-                    cm_fullscreen: fullscr_ON,
-                    cm_browser_name: browserInfo.name,
-                    cm_browser_version: browserInfo.version,
-                    cm_os_name: browserInfo.osname,
-                    cm_os_version: browserInfo.os_version,
-                    cm_tablet: String(browserInfo.tablet),
-                    cm_mobile: String(browserInfo.mobile),
-                    cm_screen_resolution: screen.width + ' x ' + screen.height,
-                    cm_window_resolution: window.innerWidth + ' x ' + window.innerHeight
-                };
-
-                console.log("Specified data calculated:", cmData);
-
-                // Store data for URL transfer
-                window.cmExperimentResults = cmData;
-                console.log("Data stored in window object");
-
-                console.log("=== DATA PREPARED FOR URL TRANSFER ===");
-                return cmData;
-
-            } catch (error) {
-                console.error("Data transmission error:", error);
-                return null;
+                document.body.innerHTML = '<div style="text-align: center; padding: 50px;"><h2 style="color: #dc3545;">No Data Available</h2><p>No task data was generated. Please contact the researcher.</p></div>';
             }
         }
 
@@ -621,7 +631,12 @@
             stimulus: end_message,
             choices: jsPsych.NO_KEYS,
             trial_duration: 3000,
+            on_start: function() {
+                // Send data to Qualtrics when task completes
+                sendDataToQualtrics();
+            },
             on_finish: function() {
+                console.log('=== EXPERIMENT FINISHED ===');
                 redirectToQualtrics();
             }
         };
@@ -659,7 +674,11 @@
             preload_audio: [tone_stim],
             on_start: function() {
                 createPhotodiodeBox();
-                console.log('CM experiment started in redirect mode');
+                console.log('CM experiment started');
+                console.log('Embedded mode:', embeddedMode);
+                
+                // Store experiment start time for duration calculation
+                start_time = performance.now();
                 
                 // Ensure the document has focus for keyboard events
                 setTimeout(() => {
@@ -689,8 +708,12 @@
                 min_height: minHeight
             },
             on_finish: function() {
-                console.log('Experiment completed, redirecting...');
-                setTimeout(redirectToQualtrics, 1000);
+                console.log('Experiment completed');
+                // Final data send (backup in case goodbye trial didn't fire)
+                setTimeout(function() {
+                    sendDataToQualtrics();
+                    redirectToQualtrics();
+                }, 1000);
             }
         });
     </script>
