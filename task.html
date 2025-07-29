@@ -71,9 +71,10 @@
         let bFBT = 15000;
 
         // Screen settings - adjust for embedded mode
+// Screen settings - adjust for embedded mode
         var fullscreen = !embeddedMode; // Disable fullscreen in embedded mode
-        var minWidth = embeddedMode ? 400 : 800;  // Smaller requirements when embedded
-        var minHeight = embeddedMode ? 300 : 600;
+        var minWidth = embeddedMode ? 300 : 800;   // Much smaller requirements when embedded
+        var minHeight = embeddedMode ? 250 : 600;  // Much smaller requirements when embedded
 
         // Disable local redirection - we'll redirect to Qualtrics
         var redirect_onCompletion = false;
