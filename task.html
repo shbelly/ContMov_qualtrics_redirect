@@ -474,7 +474,7 @@
             }
         };
 
-        function sendDataToQualtrics() {
+function sendDataToQualtrics() {
             try {
                 console.log("=== CM EXPERIMENT DATA ===");
                 
@@ -483,68 +483,77 @@
                     trial.trial_type_data && (trial.trial_type_data === 'go' || trial.trial_type_data === 'stop')
                 );
                 
-                const totalTrials = trialData.length;
-                const goTrials = trialData.filter(t => t.trial_type_data === 'go');
-                const stopTrials = trialData.filter(t => t.trial_type_data === 'stop');
-                
-                const validGoTrials = goTrials.filter(t => t.goRT);
-                const validStopTrials = stopTrials.filter(t => t.RT);
-                
-                const avgGoRT = validGoTrials.length > 0 ? 
-                    validGoTrials.reduce((sum, t) => sum + t.goRT, 0) / validGoTrials.length : 0;
-                
-                const avgStopRT = validStopTrials.length > 0 ? 
-                    validStopTrials.reduce((sum, t) => sum + t.RT, 0) / validStopTrials.length : 0;
-                
-                const excludedTrials = trialData.filter(t => t.exclude && t.exclude !== '' && t.exclude !== 'no').length;
-                const validTrials = totalTrials - excludedTrials;
+                console.log(`Found ${trialData.length} trials to send`);
                 
                 // Get browser and system info
                 const browserInfo = getBrowserInfo();
-                
-                const cmData = {
-                    cm_subject_id: code,
-                    cm_experiment_duration: Math.round((performance.now() - start_time) / 1000), // in seconds
-                    cm_blocks_completed: block_ind,
-                    cm_total_trials: totalTrials,
-                    cm_go_trials: goTrials.length,
-                    cm_stop_trials: stopTrials.length,
-                    cm_practice_trials: n_practice_trials,
-                    cm_valid_trials: validTrials,
-                    cm_excluded_trials: excludedTrials,
-                    cm_avg_go_rt: Math.round(avgGoRT),
-                    cm_median_go_rt: Math.round(calculateMedian(validGoTrials.map(t => t.goRT))),
-                    cm_min_go_rt: validGoTrials.length > 0 ? Math.min(...validGoTrials.map(t => t.goRT)) : 0,
-                    cm_max_go_rt: validGoTrials.length > 0 ? Math.max(...validGoTrials.map(t => t.goRT)) : 0,
-                    cm_avg_stop_rt: Math.round(avgStopRT),
-                    cm_median_stop_rt: Math.round(calculateMedian(validStopTrials.map(t => t.RT))),
-                    cm_min_stop_rt: validStopTrials.length > 0 ? Math.min(...validStopTrials.map(t => t.RT)) : 0,
-                    cm_max_stop_rt: validStopTrials.length > 0 ? Math.max(...validStopTrials.map(t => t.RT)) : 0,
-                    cm_fullscreen: fullscr_ON === 'yes' ? 1 : 0,
-                    cm_browser_name: browserInfo.browser || 'unknown',
-                    cm_browser_version: browserInfo.version || 'unknown',
-                    cm_os_name: browserInfo.os || 'unknown',
-                    cm_os_version: browserInfo.osVersion || 'unknown',
-                    cm_tablet: browserInfo.tablet ? 1 : 0,
-                    cm_mobile: browserInfo.mobile ? 1 : 0,
-                    cm_screen_resolution: screen.width + 'x' + screen.height,
-                    cm_window_resolution: window.innerWidth + 'x' + window.innerHeight
-                };
 
-                console.log("Sending completion data:", cmData);
+                // Create individual trial data objects matching your CSV format
+                const individualTrialData = trialData.map((trial, index) => {
+                    return {
+                        // Participant info
+                        participantID: code,
+                        age: null, // To be filled from survey data
+                        sex: null, // To be filled from survey data
+                        
+                        // Trial identification
+                        block_i: trial.block_i || Math.floor(index / n_trials_per_block) + 1,
+                        trial_i: index + 1,
+                        
+                        // Trial setup
+                        trial_type: trial.trial_type_data,
+                        count: trial.count || null,
+                        
+                        // Response data
+                        stop_time: trial.stop_time || null,
+                        goRT: trial.goRT || null,
+                        RT: trial.RT || null,
+                        
+                        // Movement data (as JSON strings, matching your format)
+                        go_pos_x: trial.go_pos_x ? JSON.stringify(trial.go_pos_x) : null,
+                        go_pos_y: trial.go_pos_y ? JSON.stringify(trial.go_pos_y) : null,
+                        go_times: trial.go_times ? JSON.stringify(trial.go_times) : null,
+                        stop_pos_x: trial.stop_pos_x ? JSON.stringify(trial.stop_pos_x) : null,
+                        stop_pos_y: trial.stop_pos_y ? JSON.stringify(trial.stop_pos_y) : null,
+                        stop_times: trial.stop_times ? JSON.stringify(trial.stop_times) : null,
+                        
+                        // Trial outcome
+                        exclude: trial.exclude || 'no',
+                        
+                        // System info
+                        focus: focus || 'focus',
+                        Fullscreen: fullscr_ON === 'yes' ? 'yes' : 'no',
+                        browser_name: browserInfo.browser || 'unknown',
+                        browser_version: parseFloat(browserInfo.version) || null,
+                        os_name: browserInfo.os || 'unknown',
+                        os_version: browserInfo.osVersion || null,
+                        tablet: browserInfo.tablet ? 'yes' : 'no',
+                        mobile: browserInfo.mobile ? 'yes' : 'no',
+                        screen_resolution: screen.width + 'x' + screen.height,
+                        window_resolution: window.innerWidth + 'x' + window.innerHeight
+                    };
+                });
+
+                console.log("Sending individual trial data:", individualTrialData);
 
                 // If running in embedded mode (iframe), send completion message to parent (Qualtrics)
                 if (embeddedMode && window.parent !== window) {
                     window.parent.postMessage({
                         type: 'CM_TASK_COMPLETE',
-                        data: cmData
+                        data: {
+                            cm_task_completed: true,
+                            cm_trial_data: individualTrialData,
+                            cm_num_trials: individualTrialData.length
+                        }
                     }, '*');
-                    console.log("Completion message sent to parent window (Qualtrics)");
-                    return cmData;
+                    console.log("Individual trial data sent to parent window (Qualtrics)");
+                    return individualTrialData;
                 } else {
-                    // Old behavior for redirect mode
-                    console.log("Running in redirect mode - storing data in localStorage");
-                    return cmData;
+                    // Old behavior for redirect mode - store in localStorage
+                    console.log("Running in redirect mode - storing individual trial data");
+                    localStorage.setItem('cm_task_completed_' + responseID, 'true');
+                    localStorage.setItem('cm_trial_data_' + responseID, JSON.stringify(individualTrialData));
+                    return individualTrialData;
                 }
 
             } catch (error) {
@@ -554,7 +563,11 @@
                 if (embeddedMode && window.parent !== window) {
                     window.parent.postMessage({
                         type: 'CM_TASK_COMPLETE',
-                        data: { cm_task_completed: true, cm_error: 'data_processing_failed' }
+                        data: { 
+                            cm_task_completed: true, 
+                            cm_error: 'data_processing_failed',
+                            cm_trial_data: [] 
+                        }
                     }, '*');
                 }
                 return null;
