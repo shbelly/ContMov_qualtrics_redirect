@@ -362,9 +362,32 @@
             on_finish: function() {
                 // Clear the display and ensure it's ready for the next trial
                 console.log('Get ready phase complete - preparing for stimulus trials');
+                
+                // CRITICAL FIX: Ensure display is properly cleared and ready
+                setTimeout(function() {
+                    var display_element = document.querySelector('#jspsych-target');
+                    if (display_element) {
+                        // Force clear any residual content
+                        display_element.innerHTML = '';
+                        display_element.style.display = 'block';
+                        display_element.style.visibility = 'visible';
+                        console.log('Display cleared and reset for first trial of block');
+                    }
+                }, 100);
             }
         };
 
+        var stimulus = {
+            type: 'custom-continuous-movement-plugin',
+            fixation_duration: FIX,
+            time: jsPsych.timelineVariable('time'),
+            t_stop_min: t_stop_min,
+            trial_type: jsPsych.timelineVariable('trial_type'),
+            trial_duration: MAXRT,
+            tone: tone_stim,
+            feedback: function() { return block_ind == 0 },
+            feedback_duration: iFBT,
+            iti: ITI,
         var stimulus = {
             type: 'custom-continuous-movement-plugin',
             fixation_duration: FIX,
@@ -381,17 +404,29 @@
                 fix_time = performance.now();
                 if (!start_time) start_time = performance.now();
                 
-                // Ensure display container is properly cleared and ready
-                console.log('Starting stimulus trial', trial_ind, 'in block', block_ind);
+                // CRITICAL FIX: Add longer delay for first trial of each block
+                var isFirstTrialOfBlock = (trial_ind == 1);
+                var delay = isFirstTrialOfBlock ? 200 : 50;
                 
-                // Add a small delay to ensure the plugin has time to initialize
-                // This helps prevent display glitches
+                console.log('Starting stimulus trial', trial_ind, 'in block', block_ind, 'first trial:', isFirstTrialOfBlock);
+                
                 setTimeout(function() {
                     var display_element = document.querySelector('#jspsych-target');
                     if (display_element) {
+                        // For first trial of block, ensure complete reset
+                        if (isFirstTrialOfBlock) {
+                            display_element.innerHTML = '';
+                            display_element.style.cssText = '';  // Clear all inline styles
+                            display_element.className = '';      // Clear classes
+                            
+                            // Force reflow
+                            display_element.offsetHeight;
+                            
+                            console.log('First trial display reset complete');
+                        }
                         console.log('Display element ready for stimulus');
                     }
-                }, 10);
+                }, delay);
             },
             on_finish: function(data) {
                 // Store data immediately when trial finishes
@@ -483,6 +518,9 @@
                 ]
             },
             on_finish: function() {
+                console.log('Block', block_ind, 'completed, resetting for next block');
+                
+                // Reset all counters
                 trial_ind = 1;
                 block_ind = block_ind + 1;
                 n_stop = 0;
@@ -493,6 +531,22 @@
                 av_goRT = 0;
                 av_ssRT = 0;
                 early_ns = 0;
+                
+                // CRITICAL FIX: Add delay and display reset before next block
+                setTimeout(function() {
+                    var display_element = document.querySelector('#jspsych-target');
+                    if (display_element) {
+                        // Complete reset of display element
+                        display_element.innerHTML = '';
+                        display_element.style.cssText = '';
+                        display_element.className = '';
+                        
+                        // Force reflow
+                        display_element.offsetHeight;
+                        
+                        console.log('Display fully reset between blocks');
+                    }
+                }, 200);
             }
         };
 
