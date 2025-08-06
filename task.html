@@ -388,17 +388,6 @@
             feedback: function() { return block_ind == 0 },
             feedback_duration: iFBT,
             iti: ITI,
-        var stimulus = {
-            type: 'custom-continuous-movement-plugin',
-            fixation_duration: FIX,
-            time: jsPsych.timelineVariable('time'),
-            t_stop_min: t_stop_min,
-            trial_type: jsPsych.timelineVariable('trial_type'),
-            trial_duration: MAXRT,
-            tone: tone_stim,
-            feedback: function() { return block_ind == 0 },
-            feedback_duration: iFBT,
-            iti: ITI,
             on_start: function(data) {  
                 trigger_write(10);
                 fix_time = performance.now();
@@ -406,7 +395,7 @@
                 
                 // CRITICAL FIX: Add longer delay for first trial of each block
                 var isFirstTrialOfBlock = (trial_ind == 1);
-                var delay = isFirstTrialOfBlock ? 200 : 50;
+                var delay = isFirstTrialOfBlock ? 500 : 100;
                 
                 console.log('Starting stimulus trial', trial_ind, 'in block', block_ind, 'first trial:', isFirstTrialOfBlock);
                 
@@ -419,10 +408,16 @@
                             display_element.style.cssText = '';  // Clear all inline styles
                             display_element.className = '';      // Clear classes
                             
-                            // Force reflow
+                            // Force reflow to ensure changes take effect
                             display_element.offsetHeight;
                             
-                            console.log('First trial display reset complete');
+                            // Additional DOM stabilization
+                            setTimeout(function() {
+                                display_element.style.display = 'block';
+                                display_element.style.visibility = 'visible';
+                                display_element.offsetHeight; // Force another reflow
+                                console.log('First trial display reset complete');
+                            }, 50);
                         }
                         console.log('Display element ready for stimulus');
                     }
@@ -541,10 +536,15 @@
                         display_element.style.cssText = '';
                         display_element.className = '';
                         
-                        // Force reflow
+                        // Multiple reflows to ensure complete reset
                         display_element.offsetHeight;
                         
-                        console.log('Display fully reset between blocks');
+                        setTimeout(function() {
+                            display_element.style.display = 'block';
+                            display_element.style.visibility = 'visible';
+                            display_element.offsetHeight; // Another reflow
+                            console.log('Display fully reset between blocks');
+                        }, 100);
                     }
                 }, 200);
             }
