@@ -71,6 +71,7 @@
         let bFBT = 15000;
 
         // Screen settings - adjust for embedded mode
+// Screen settings - adjust for embedded mode
         var fullscreen = !embeddedMode; // Disable fullscreen in embedded mode
         var minWidth = embeddedMode ? 300 : 800;   // Much smaller requirements when embedded
         var minHeight = embeddedMode ? 250 : 600;  // Much smaller requirements when embedded
@@ -281,8 +282,7 @@
             trial_duration: ITI,
             on_start: function() {
                 iti_start_t = performance.now();
-                // Delay the data writing to ensure all variables are set
-                setTimeout(write_cm_data, 50);
+                setTimeout(write_cm_data, 20);
             },
             on_finish: function() {
                 console.log('ITI took ' + (performance.now() - iti_start_t) + 'ms');
@@ -297,22 +297,18 @@
                 console.log('=== BLOCK START SCREEN ===');
                 console.log('Waiting for ANY keyboard input...');
                 
-                // Ensure DOM is ready before applying focus
+                // Force focus
                 setTimeout(() => {
-                    if (document.body) {
-                        document.body.focus();
-                        document.body.tabIndex = -1;
-                        console.log('Applied focus to document');
-                    }
-                }, 200);
+                    document.body.focus();
+                    document.body.tabIndex = -1;
+                    console.log('Applied focus to document');
+                }, 100);
                 
                 // Add click listener
                 var clickHandler = function(e) {
                     console.log('Document clicked - keyboard should work now');
-                    if (document.body) {
-                        document.body.focus();
-                        e.target.focus();
-                    }
+                    document.body.focus();
+                    e.target.focus();
                     document.removeEventListener('click', clickHandler);
                 };
                 document.addEventListener('click', clickHandler);
@@ -326,11 +322,9 @@
                     document.removeEventListener('keydown', keyHandler);
                     
                     // Force end the trial immediately
-                    if (jsPsych && jsPsych.finishTrial) {
-                        jsPsych.finishTrial({
-                            response: e.key || e.code || 'unknown_key'
-                        });
-                    }
+                    jsPsych.finishTrial({
+                        response: e.key || e.code || 'unknown_key'
+                    });
                 };
                 document.addEventListener('keydown', keyHandler);
                 
@@ -339,9 +333,7 @@
                     console.log('AUTO-CONTINUING after 10 seconds');
                     try {
                         document.removeEventListener('keydown', keyHandler);
-                        if (jsPsych && jsPsych.finishTrial) {
-                            jsPsych.finishTrial({response: 'auto_continue'});
-                        }
+                        jsPsych.finishTrial({response: 'auto_continue'});
                     } catch (e) {
                         console.log('Auto-continue failed:', e);
                     }
@@ -359,22 +351,6 @@
             stimulus: get_ready_message,
             choices: jsPsych.NO_KEYS,
             trial_duration: 2000,
-            on_finish: function() {
-                // Clear the display and ensure it's ready for the next trial
-                console.log('Get ready phase complete - preparing for stimulus trials');
-                
-                // CRITICAL FIX: Ensure display is properly cleared and ready
-                setTimeout(function() {
-                    var display_element = document.querySelector('#jspsych-target');
-                    if (display_element) {
-                        // Force clear any residual content
-                        display_element.innerHTML = '';
-                        display_element.style.display = 'block';
-                        display_element.style.visibility = 'visible';
-                        console.log('Display cleared and reset for first trial of block');
-                    }
-                }, 100);
-            }
         };
 
         var stimulus = {
@@ -392,39 +368,8 @@
                 trigger_write(10);
                 fix_time = performance.now();
                 if (!start_time) start_time = performance.now();
-                
-                // CRITICAL FIX: Add longer delay for first trial of each block
-                var isFirstTrialOfBlock = (trial_ind == 1);
-                var delay = isFirstTrialOfBlock ? 500 : 100;
-                
-                console.log('Starting stimulus trial', trial_ind, 'in block', block_ind, 'first trial:', isFirstTrialOfBlock);
-                
-                setTimeout(function() {
-                    var display_element = document.querySelector('#jspsych-target');
-                    if (display_element) {
-                        // For first trial of block, ensure complete reset
-                        if (isFirstTrialOfBlock) {
-                            display_element.innerHTML = '';
-                            display_element.style.cssText = '';  // Clear all inline styles
-                            display_element.className = '';      // Clear classes
-                            
-                            // Force reflow to ensure changes take effect
-                            display_element.offsetHeight;
-                            
-                            // Additional DOM stabilization
-                            setTimeout(function() {
-                                display_element.style.display = 'block';
-                                display_element.style.visibility = 'visible';
-                                display_element.offsetHeight; // Force another reflow
-                                console.log('First trial display reset complete');
-                            }, 50);
-                        }
-                        console.log('Display element ready for stimulus');
-                    }
-                }, delay);
             },
             on_finish: function(data) {
-                // Store data immediately when trial finishes
                 trial_type = data.trial_type_data || data.trial_type;
                 count = data.count;
                 stop_signal_time = data.stop_signal_time;
@@ -437,13 +382,6 @@
                 stop_pos_y = data.stop_pos_y;
                 stop_times = data.stop_times;
                 exclude = data.exclude;
-                
-                console.log('Stimulus trial completed:', {
-                    trial: trial_ind,
-                    type: trial_type,
-                    exclude: exclude
-                });
-                
                 trial_ind++;
 
                 // Block feedback tracking
@@ -513,9 +451,6 @@
                 ]
             },
             on_finish: function() {
-                console.log('Block', block_ind, 'completed, resetting for next block');
-                
-                // Reset all counters
                 trial_ind = 1;
                 block_ind = block_ind + 1;
                 n_stop = 0;
@@ -526,27 +461,6 @@
                 av_goRT = 0;
                 av_ssRT = 0;
                 early_ns = 0;
-                
-                // CRITICAL FIX: Add delay and display reset before next block
-                setTimeout(function() {
-                    var display_element = document.querySelector('#jspsych-target');
-                    if (display_element) {
-                        // Complete reset of display element
-                        display_element.innerHTML = '';
-                        display_element.style.cssText = '';
-                        display_element.className = '';
-                        
-                        // Multiple reflows to ensure complete reset
-                        display_element.offsetHeight;
-                        
-                        setTimeout(function() {
-                            display_element.style.display = 'block';
-                            display_element.style.visibility = 'visible';
-                            display_element.offsetHeight; // Another reflow
-                            console.log('Display fully reset between blocks');
-                        }, 100);
-                    }
-                }, 200);
             }
         };
 
@@ -561,7 +475,7 @@
             }
         };
 
-        function sendDataToQualtrics() {
+function sendDataToQualtrics() {
             try {
                 console.log("=== CM EXPERIMENT DATA ===");
                 
@@ -795,37 +709,18 @@
                 // Store experiment start time for duration calculation
                 start_time = performance.now();
                 
-                // Enhanced initialization sequence to prevent display glitches
+                // Ensure the document has focus for keyboard events
                 setTimeout(() => {
-                    // Ensure document is ready and focused
-                    if (document.body) {
-                        document.body.focus();
-                        document.body.tabIndex = -1;
-                        console.log('Document focus applied at startup');
-                        
-                        // Additional initialization for display stability
-                        var display_element = document.querySelector('#jspsych-target');
-                        if (display_element) {
-                            // Clear any residual content and ensure proper state
-                            display_element.style.display = 'block';
-                            display_element.style.visibility = 'visible';
-                            console.log('Display element initialized properly');
-                        }
-                    }
+                    document.body.focus();
+                    document.body.tabIndex = -1;
+                    console.log('Document focus applied at startup');
                 }, 500);
                 
                 // Global click handler to maintain focus
                 document.addEventListener('click', function() {
-                    if (document.body) {
-                        document.body.focus();
-                        console.log('Focus restored via click');
-                    }
+                    document.body.focus();
+                    console.log('Focus restored via click');
                 });
-                
-                // Additional safety check for custom plugin readiness
-                setTimeout(() => {
-                    console.log('Custom plugin initialization window complete');
-                }, 1000);
             },
             on_interaction_data_update: function(data) {
                 var interaction = data.event;
