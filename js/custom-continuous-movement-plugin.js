@@ -118,6 +118,14 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
     var stop_time = null;
     var interval = null;  // interval time for checking for stop
     var tmp_RT = null;  // variable for storing old RT to check if changed
+    
+    // Movement stop detection variables
+    var last_mouse_time = null;
+    var movement_check_interval = null;
+    var movement_threshold = 100; // milliseconds without movement to consider "stopped"
+    var movement_stopped = false;
+    var actual_stop_time = null; // When movement actually stopped
+    
     if (trial.trial_type == 'stop') {
       stop_time = myrng() * (trial.time - 1 - trial.t_stop_min) + trial.t_stop_min;
     }
@@ -172,6 +180,32 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       too_slow: 0
     };
 
+    // Function to detect when movement stops
+    var detect_movement_stop = function() {
+      var current_time = performance.now();
+      
+      // If enough time has passed without movement, consider it stopped
+      if (last_mouse_time && !movement_stopped && (current_time - last_mouse_time) >= movement_threshold) {
+        // Record the stop time (when they actually stopped moving)
+        // Convert to seconds to match existing data format
+        actual_stop_time = (last_mouse_time - start_time) / 1000;
+        movement_stopped = true;
+        
+        console.log(`Movement stopped detected at: ${actual_stop_time} seconds`);
+      }
+    };
+
+    // Start movement stop detection
+    var start_movement_detection = function() {
+      // Reset variables
+      last_mouse_time = null;
+      actual_stop_time = null;
+      movement_stopped = false;
+      
+      // Check for movement stop every 20ms
+      movement_check_interval = setInterval(detect_movement_stop, 20);
+    };
+
     // function to end trial when it is time
     var end_trial = function() {
       // stop the audio file if it is playing with error handling
@@ -188,17 +222,33 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         }
       }
 
+      // Stop movement detection
+      if (movement_check_interval) {
+        clearInterval(movement_check_interval);
+        movement_check_interval = null;
+      }
+
       // kill any remaining setTimeout handlers
       jsPsych.pluginAPI.clearAllTimeouts();
 
       // remove mouse listener
       document.removeEventListener('mousemove', mouse_move_event);
 
+      // Determine the stop_time to record
+      var recorded_stop_time;
+      if (trial.trial_type === 'go') {
+        // For go trials, use the detected movement stop time
+        recorded_stop_time = actual_stop_time;
+      } else {
+        // For stop trials, use the original stop_time (when stop signal appeared)
+        recorded_stop_time = stop_time;
+      }
+
       // gather the data to store for the trial
       var trial_data = {
         "trial_type_data": trial.trial_type,
         "count": trial.time,
-        "stop_time": stop_time,
+        "stop_time": recorded_stop_time,
         "start_time": start_time,
         "number_times": number_times,
         "stop_signal_time": stop_signal_time,
@@ -255,6 +305,9 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       var y = e.clientY;
       var xp = null;  // previous location
       var yp = null;
+
+      // Update last mouse movement time for stop detection
+      last_mouse_time = now_time;
 
       if (go == null) {
         return;
@@ -337,6 +390,9 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         trigger_write(11);
         go = true;
         start_time = performance.now();
+        
+        // Start movement stop detection when movement begins
+        start_movement_detection();
       }, counter + trial.fixation_duration)
     }
 
