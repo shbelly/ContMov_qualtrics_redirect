@@ -235,15 +235,16 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       // remove mouse listener
       document.removeEventListener('mousemove', mouse_move_event);
 
-      // SIMPLE FIX: For go trials, use the time when countdown naturally ends (trial.time)
-      // For stop trials, use the programmed early stop time
+      // Use the same stop time calculation for both trial types:
+      // Time from when STOP signal appears until participant actually stops moving
       var recorded_stop_time;
       if (trial.trial_type === 'go') {
-        // Go trials: stop_time should be when countdown ends naturally
-        recorded_stop_time = trial.time;  // The countdown end time
+        // Go trials: use RT from when stop signal appeared (same as stop trials)
+        // Convert from milliseconds to seconds to match stop trial format
+        recorded_stop_time = response.RT ? response.RT / 1000 : null;
       } else {
-        // Stop trials: use the programmed early stop time
-        recorded_stop_time = stop_time;
+        // Stop trials: use existing RT calculation (already in seconds)
+        recorded_stop_time = response.RT ? response.RT / 1000 : null;
       }
 
       // gather the data to store for the trial
