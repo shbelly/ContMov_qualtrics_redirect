@@ -84,9 +84,10 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
     // setup audio with error handling
     var source = null;
     var audio = null;
+    var context = null; // Fix: declare context variable
     if(trial.tone !== null) {
       try {
-        var context = jsPsych.pluginAPI.audioContext();
+        context = jsPsych.pluginAPI.audioContext();
         if(context !== null){
           source = context.createBufferSource();
           var audioBuffer = jsPsych.pluginAPI.getAudioBuffer(trial.tone);
@@ -237,18 +238,23 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       // Determine the stop_time to record
       var recorded_stop_time;
       if (trial.trial_type === 'go') {
-        // For go trials, use the detected movement stop time
+        // For go trials, there's only one stop time - when they actually stopped
         recorded_stop_time = actual_stop_time;
+        console.log('Go trial - movement stopped at:', recorded_stop_time, 'seconds');
       } else {
-        // For stop trials, use the original stop_time (when stop signal appeared)
+        // For stop trials, use the programmed stop_time (when stop signal appeared)
         recorded_stop_time = stop_time;
+        console.log('Stop trial - programmed stop time:', recorded_stop_time, 'seconds');
+        console.log('Stop trial - actual movement stop:', actual_stop_time, 'seconds');
       }
 
       // gather the data to store for the trial
       var trial_data = {
         "trial_type_data": trial.trial_type,
         "count": trial.time,
-        "stop_time": recorded_stop_time,
+        "stop_time": recorded_stop_time, // Main stop time for analysis
+        "actual_movement_stop": actual_stop_time, // When movement actually stopped (useful for stop trials)
+        "programmed_stop_time": stop_time,    // When stop signal appeared (null for go trials)
         "start_time": start_time,
         "number_times": number_times,
         "stop_signal_time": stop_signal_time,
