@@ -84,10 +84,9 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
     // setup audio with error handling
     var source = null;
     var audio = null;
-    var context = null;
     if(trial.tone !== null) {
       try {
-        context = jsPsych.pluginAPI.audioContext();
+        var context = jsPsych.pluginAPI.audioContext();
         if(context !== null){
           source = context.createBufferSource();
           var audioBuffer = jsPsych.pluginAPI.getAudioBuffer(trial.tone);
@@ -235,15 +234,14 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       // remove mouse listener
       document.removeEventListener('mousemove', mouse_move_event);
 
-      // Revert stop_time to original behavior
-      // For stop trials: use programmed stop time
-      // For go trials: null (as originally intended)
-      var recorded_stop_time = stop_time; // This preserves original logic
-      
-      // Add new variable for go trial reaction times
-      var go_stop_rt = null;
-      if (trial.trial_type === 'go' && response.RT !== null && response.RT !== undefined) {
-        go_stop_rt = response.RT / 1000; // Convert ms to seconds for go trials only
+      // Determine the stop_time to record
+      var recorded_stop_time;
+      if (trial.trial_type === 'go') {
+        // For go trials, use the detected movement stop time
+        recorded_stop_time = actual_stop_time;
+      } else {
+        // For stop trials, use the original stop_time (when stop signal appeared)
+        recorded_stop_time = stop_time;
       }
 
       // gather the data to store for the trial
@@ -251,7 +249,6 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         "trial_type_data": trial.trial_type,
         "count": trial.time,
         "stop_time": recorded_stop_time,
-        "go_stop_rt": go_stop_rt, // NEW: Go trial reaction time in seconds
         "start_time": start_time,
         "number_times": number_times,
         "stop_signal_time": stop_signal_time,
