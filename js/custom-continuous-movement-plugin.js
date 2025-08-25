@@ -84,7 +84,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
     // setup audio with error handling
     var source = null;
     var audio = null;
-    var context = null; // Fix: declare context variable
+    var context = null;
     if(trial.tone !== null) {
       try {
         context = jsPsych.pluginAPI.audioContext();
@@ -185,33 +185,14 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
     var detect_movement_stop = function() {
       var current_time = performance.now();
       
-      // Debug logging
-      if (trial.trial_type === 'go' && last_mouse_time) {
-        var time_since_movement = current_time - last_mouse_time;
-        if (time_since_movement > 50) { // Log if no movement for 50ms+
-          console.log(`Go trial - No movement for ${time_since_movement}ms`);
-        }
-      }
-      
       // If enough time has passed without movement, consider it stopped
       if (last_mouse_time && !movement_stopped && (current_time - last_mouse_time) >= movement_threshold) {
-        // Ensure start_time is defined
-        if (start_time) {
-          // Record the stop time (when they actually stopped moving)
-          // Convert to seconds to match existing data format
-          actual_stop_time = (last_mouse_time - start_time) / 1000;
-          movement_stopped = true;
-          
-          console.log(`Movement stopped detected at: ${actual_stop_time} seconds`);
-          
-          // For go trials, trigger end_trial when movement stops
-          if (trial.trial_type === 'go') {
-            console.log('Go trial movement stopped - ending trial');
-            end_trial();
-          }
-        } else {
-          console.warn('start_time undefined when trying to record movement stop');
-        }
+        // Record the stop time (when they actually stopped moving)
+        // Convert to seconds to match existing data format
+        actual_stop_time = (last_mouse_time - start_time) / 1000;
+        movement_stopped = true;
+        
+        console.log(`Movement stopped detected at: ${actual_stop_time} seconds`);
       }
     };
 
@@ -254,26 +235,22 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       // remove mouse listener
       document.removeEventListener('mousemove', mouse_move_event);
 
-      // Determine the stop_time to record
+      // SIMPLE FIX: For go trials, use the time when countdown naturally ends (trial.time)
+      // For stop trials, use the programmed early stop time
       var recorded_stop_time;
       if (trial.trial_type === 'go') {
-        // For go trials, there's only one stop time - when they actually stopped
-        recorded_stop_time = actual_stop_time;
-        console.log('Go trial - movement stopped at:', recorded_stop_time, 'seconds');
+        // Go trials: stop_time should be when countdown ends naturally
+        recorded_stop_time = trial.time;  // The countdown end time
       } else {
-        // For stop trials, use the programmed stop_time (when stop signal appeared)
+        // Stop trials: use the programmed early stop time
         recorded_stop_time = stop_time;
-        console.log('Stop trial - programmed stop time:', recorded_stop_time, 'seconds');
-        console.log('Stop trial - actual movement stop:', actual_stop_time, 'seconds');
       }
 
       // gather the data to store for the trial
       var trial_data = {
         "trial_type_data": trial.trial_type,
         "count": trial.time,
-        "stop_time": recorded_stop_time, // Main stop time for analysis
-        "actual_movement_stop": actual_stop_time, // When movement actually stopped (useful for stop trials)
-        "programmed_stop_time": stop_time,    // When stop signal appeared (null for go trials)
+        "stop_time": recorded_stop_time,
         "start_time": start_time,
         "number_times": number_times,
         "stop_signal_time": stop_signal_time,
