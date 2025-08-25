@@ -235,16 +235,15 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       // remove mouse listener
       document.removeEventListener('mousemove', mouse_move_event);
 
-      // Use the same stop time calculation for both trial types:
-      // Time from when STOP signal appears until participant actually stops moving
-      var recorded_stop_time;
-      if (trial.trial_type === 'go') {
-        // Go trials: use RT from when stop signal appeared (same as stop trials)
-        // Convert from milliseconds to seconds to match stop trial format
-        recorded_stop_time = response.RT ? response.RT / 1000 : null;
-      } else {
-        // Stop trials: use existing RT calculation (already in seconds)
-        recorded_stop_time = response.RT ? response.RT / 1000 : null;
+      // Revert stop_time to original behavior
+      // For stop trials: use programmed stop time
+      // For go trials: null (as originally intended)
+      var recorded_stop_time = stop_time; // This preserves original logic
+      
+      // Add new variable for go trial reaction times
+      var go_stop_rt = null;
+      if (trial.trial_type === 'go' && response.RT !== null && response.RT !== undefined) {
+        go_stop_rt = response.RT / 1000; // Convert ms to seconds for go trials only
       }
 
       // gather the data to store for the trial
@@ -252,6 +251,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         "trial_type_data": trial.trial_type,
         "count": trial.time,
         "stop_time": recorded_stop_time,
+        "go_stop_rt": go_stop_rt, // NEW: Go trial reaction time in seconds
         "start_time": start_time,
         "number_times": number_times,
         "stop_signal_time": stop_signal_time,
