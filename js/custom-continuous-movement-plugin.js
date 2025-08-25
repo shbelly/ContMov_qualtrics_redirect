@@ -123,7 +123,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
     // Movement stop detection variables
     var last_mouse_time = null;
     var movement_check_interval = null;
-    var movement_threshold = 200; // milliseconds without movement to consider "stopped"
+    var movement_threshold = 100; // milliseconds without movement to consider "stopped"
     var movement_stopped = false;
     var actual_stop_time = null; // When movement actually stopped
     
