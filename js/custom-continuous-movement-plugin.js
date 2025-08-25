@@ -185,14 +185,33 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
     var detect_movement_stop = function() {
       var current_time = performance.now();
       
+      // Debug logging
+      if (trial.trial_type === 'go' && last_mouse_time) {
+        var time_since_movement = current_time - last_mouse_time;
+        if (time_since_movement > 50) { // Log if no movement for 50ms+
+          console.log(`Go trial - No movement for ${time_since_movement}ms`);
+        }
+      }
+      
       // If enough time has passed without movement, consider it stopped
       if (last_mouse_time && !movement_stopped && (current_time - last_mouse_time) >= movement_threshold) {
-        // Record the stop time (when they actually stopped moving)
-        // Convert to seconds to match existing data format
-        actual_stop_time = (last_mouse_time - start_time) / 1000;
-        movement_stopped = true;
-        
-        console.log(`Movement stopped detected at: ${actual_stop_time} seconds`);
+        // Ensure start_time is defined
+        if (start_time) {
+          // Record the stop time (when they actually stopped moving)
+          // Convert to seconds to match existing data format
+          actual_stop_time = (last_mouse_time - start_time) / 1000;
+          movement_stopped = true;
+          
+          console.log(`Movement stopped detected at: ${actual_stop_time} seconds`);
+          
+          // For go trials, trigger end_trial when movement stops
+          if (trial.trial_type === 'go') {
+            console.log('Go trial movement stopped - ending trial');
+            end_trial();
+          }
+        } else {
+          console.warn('start_time undefined when trying to record movement stop');
+        }
       }
     };
 
