@@ -126,6 +126,10 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
     var movement_stopped = false;
     var actual_stop_time = null; // When movement actually stopped
     
+    // Timestamp variables for signal appearances
+    var start_signal = null; // Timestamp when start signal appears on screen
+    var stop_signal = null;  // Timestamp when stop signal appears on screen
+    
     if (trial.trial_type == 'stop') {
       stop_time = myrng() * (trial.time - 1 - trial.t_stop_min) + trial.t_stop_min;
     }
@@ -173,7 +177,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       go_times: [],
       stop_pos_x: [],
       stop_pos_y: [],
-      stop_times: [],
+      stop_times: [], // This now stores actual timestamps when participant stops moving
       exclude: null,
       wrong_way: 0,
       incorrect_movement: 0,
@@ -190,6 +194,9 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         // Convert to seconds to match existing data format
         actual_stop_time = (last_mouse_time - start_time) / 1000;
         movement_stopped = true;
+        
+        // Add the actual stop timestamp to stop_times
+        response.stop_times.push(last_mouse_time - start_time);
         
         console.log(`Movement stopped detected at: ${actual_stop_time} seconds`);
       }
@@ -250,8 +257,9 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         "count": trial.time,
         "stop_time": recorded_stop_time,
         "start_time": start_time,
+        "start_signal": start_signal,  // NEW: Timestamp when start signal appeared
+        "stop_signal": stop_signal,    // NEW: Timestamp when stop signal appeared
         "number_times": number_times,
-        "stop_signal_time": stop_signal_time,
         "goRT": response.goRT,
         "RT": response.RT,
         "go_pos_x": response.go_pos_x,
@@ -259,7 +267,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         "go_times": response.go_times,
         "stop_pos_x": response.stop_pos_x,
         "stop_pos_y": response.stop_pos_y,
-        "stop_times": response.stop_times,
+        "stop_times": response.stop_times, // Now contains actual movement stop timestamps
         "exclude": response.exclude
       };
 
@@ -331,7 +339,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         }
         response.stop_pos_x.push(x);
         response.stop_pos_y.push(y);
-        response.stop_times.push(Math.round(now_time - stop_time2));
+        // Note: stop_times now only records actual movement stops, not trajectory timestamps
       }
       if (xp !== null) {
         judge_movement(x, y, xp, yp);
@@ -344,6 +352,12 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         trigger_write(15);
         clearInterval(interval);
         console.log('Stop RT was ' + response.RT + ' ms');
+        
+        // Record the final stop time if not already recorded
+        if (!movement_stopped && response.stop_times.length === 0) {
+          response.stop_times.push(performance.now() - start_time);
+        }
+        
         // judge if trial should be excluded
         if (response.RT > 500) {  // will be overwritten by all others, don't have to use
           response.exclude = 'remember: try to stop';
@@ -388,6 +402,10 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         display_element.innerHTML = stimuli[0];
         showPhotodiodeBox();
         trigger_write(11);
+        
+        // Record timestamp when start signal appears on screen
+        start_signal = performance.now();
+        
         go = true;
         start_time = performance.now();
         
@@ -412,12 +430,14 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
 
     // show stop at end
     var stop_time2;
-    var stop_signal_time;
     counter += my_stop_time;
     jsPsych.pluginAPI.setTimeout(function() {
         display_element.innerHTML = stop;
         trigger_write(stop_time == null ? 13 : 14);
-        stop_signal_time = performance.now();
+        
+        // Record timestamp when stop signal appears on screen
+        stop_signal = performance.now();
+        
         // start audio with error handling
         if(trial.tone !== null) {
           try {
