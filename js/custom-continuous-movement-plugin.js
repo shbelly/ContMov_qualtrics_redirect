@@ -117,7 +117,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       }
     }
     
-    var stop_time = null;
+    var stop_time = null;  // This is the calculated stop time, will be renamed to stop_signal in output
     var interval = null;
     var tmp_RT = null;
     
@@ -242,10 +242,10 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       var trial_data = {
         "trial_type_data": trial.trial_type,
         "count": trial.time,
-        "stop_time": recorded_stop_time,
+        "stop_time": recorded_stop_time,  // This will be the old stop_time value for backward compatibility
         "start_time": start_time,
-        "start_signal": start_signal,
-        "stop_signal": stop_signal,
+        "start_signal": start_signal,     // NEW: timestamp when start signal appeared
+        "stop_signal": stop_signal,       // NEW: timestamp when stop signal appeared
         "number_times": number_times,
         "goRT": response.goRT,
         "RT": response.RT,
@@ -254,7 +254,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         "go_times": response.go_times,
         "stop_pos_x": response.stop_pos_x,
         "stop_pos_y": response.stop_pos_y,
-        "stop_times": response.stop_times,
+        "stop_times": response.stop_times,  // When participants actually stopped moving
         "exclude": response.exclude
       };
 
@@ -418,7 +418,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         
         // ALWAYS record stop_signal timestamp
         stop_signal = performance.now();
-        console.log('Stop signal recorded:', stop_signal);
+        console.log('Stop signal timestamp recorded:', stop_signal);
         
         if(trial.tone !== null) {
           try {
