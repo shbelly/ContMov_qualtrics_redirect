@@ -79,7 +79,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
   }
 
   plugin.trial = function(display_element, trial) {
-    // Initialize timestamp variables at the top - ALWAYS defined
+    // Initialize timestamp variables - these will record when signals actually appear
     var start_signal = null;
     var stop_signal = null;
     
@@ -117,7 +117,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       }
     }
     
-    var stop_time = null;  // This is the calculated stop time, will be renamed to stop_signal in output
+    var stop_time = null;  // This is the calculated stop time (when stop should occur)
     var interval = null;
     var tmp_RT = null;
     
@@ -230,22 +230,13 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       // remove mouse listener
       document.removeEventListener('mousemove', mouse_move_event);
 
-      // Determine the stop_time to record
-      var recorded_stop_time;
-      if (trial.trial_type === 'go') {
-        recorded_stop_time = actual_stop_time;
-      } else {
-        recorded_stop_time = stop_time;
-      }
-
       // gather the data to store for the trial
       var trial_data = {
         "trial_type_data": trial.trial_type,
         "count": trial.time,
-        "stop_time": recorded_stop_time,  // This will be the old stop_time value for backward compatibility
-        "start_time": start_time,
-        "start_signal": start_signal,     // NEW: timestamp when start signal appeared
-        "stop_signal": stop_signal,       // NEW: timestamp when stop signal appeared
+        "start_signal": start_signal,     // Timestamp when start signal appeared
+        "stop_signal": stop_signal,       // Timestamp when stop signal appeared  
+        "start_time": start_time,         // Reference start time
         "number_times": number_times,
         "goRT": response.goRT,
         "RT": response.RT,
@@ -377,7 +368,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
     var counter = 0;
     var start_time;
     
-    // FIXED: Always set up the start signal, regardless of fixation_duration
+    // Always set up the start signal, regardless of fixation_duration
     var fixation_time = trial.fixation_duration || 0;
     counter += fixation_time;
     
@@ -386,9 +377,9 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       showPhotodiodeBox();
       trigger_write(11);
       
-      // ALWAYS record start_signal timestamp
+      // Record start_signal timestamp when start signal actually appears
       start_signal = performance.now();
-      console.log('Start signal recorded:', start_signal);
+      console.log('Start signal timestamp:', start_signal);
       
       go = true;
       start_time = performance.now();
@@ -416,9 +407,9 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         display_element.innerHTML = stop;
         trigger_write(stop_time == null ? 13 : 14);
         
-        // ALWAYS record stop_signal timestamp
+        // Record stop_signal timestamp when stop signal actually appears
         stop_signal = performance.now();
-        console.log('Stop signal timestamp recorded:', stop_signal);
+        console.log('Stop signal timestamp:', stop_signal);
         
         if(trial.tone !== null) {
           try {
