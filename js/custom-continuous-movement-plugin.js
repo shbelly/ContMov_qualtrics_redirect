@@ -10,6 +10,7 @@
  *
  *
  **/
+console.log("Plugin version: UPDATED_2025_START_STOP_SIGNALS");
 
 var stimuli = [];
 
