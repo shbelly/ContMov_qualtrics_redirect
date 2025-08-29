@@ -125,8 +125,8 @@
         var trial_type = null;
         var count = null;
         var start_time = null;
-        var stop_signal_time = null;
-        var stop_time = null;
+        var start_signal = null;  // UPDATED: New timestamp variable
+        var stop_signal = null;   // UPDATED: New timestamp variable
         var goRT = null;
         var RT = null;
         var go_pos_x = null;
@@ -267,6 +267,8 @@
                 block: block_ind,
                 trial: trial_ind,
                 type: trial_type,
+                start_signal: start_signal,  // UPDATED
+                stop_signal: stop_signal,    // UPDATED
                 goRT: goRT,
                 RT: RT,
                 exclude: exclude
@@ -336,7 +338,8 @@
             on_finish: function(data) {
                 trial_type = data.trial_type_data || data.trial_type;
                 count = data.count;
-                stop_signal_time = data.stop_signal_time;
+                start_signal = data.start_signal;  // UPDATED: Capture new timestamp
+                stop_signal = data.stop_signal;    // UPDATED: Capture new timestamp
                 goRT = data.goRT;
                 RT = data.RT;
                 go_pos_x = data.go_pos_x;
@@ -439,7 +442,7 @@
             }
         };
 
-function sendDataToQualtrics() {
+        function sendDataToQualtrics() {
             try {
                 console.log("=== CM EXPERIMENT DATA ===");
                 
@@ -453,7 +456,7 @@ function sendDataToQualtrics() {
                 // Get browser and system info
                 const browserInfo = getBrowserInfo();
 
-                // Create individual trial data objects matching your CSV format
+                // Create individual trial data objects with UPDATED timestamp fields
                 const individualTrialData = trialData.map((trial, index) => {
                     return {
                         // Participant info
@@ -469,8 +472,12 @@ function sendDataToQualtrics() {
                         trial_type: trial.trial_type_data,
                         count: trial.count || null,
                         
+                        // UPDATED: Use new timestamp fields instead of stop_time
+                        start_signal: trial.start_signal || null,  // NEW: Timestamp when start signal appeared
+                        stop_signal: trial.stop_signal || null,    // NEW: Timestamp when stop signal appeared
+                        start_time: trial.start_time || null,      // Reference start time
+                        
                         // Response data
-                        stop_time: trial.stop_time || null,
                         goRT: trial.goRT || null,
                         RT: trial.RT || null,
                         
@@ -480,7 +487,7 @@ function sendDataToQualtrics() {
                         go_times: trial.go_times ? JSON.stringify(trial.go_times) : null,
                         stop_pos_x: trial.stop_pos_x ? JSON.stringify(trial.stop_pos_x) : null,
                         stop_pos_y: trial.stop_pos_y ? JSON.stringify(trial.stop_pos_y) : null,
-                        stop_times: trial.stop_times ? JSON.stringify(trial.stop_times) : null,
+                        stop_times: trial.stop_times ? JSON.stringify(trial.stop_times) : null,  // When participants actually stopped
                         
                         // Trial outcome
                         exclude: trial.exclude || 'no',
@@ -499,7 +506,7 @@ function sendDataToQualtrics() {
                     };
                 });
 
-                console.log("Sending individual trial data:", individualTrialData);
+                console.log("Sending updated trial data with timestamps:", individualTrialData);
 
                 // If running in embedded mode (iframe), send completion message to parent (Qualtrics)
                 if (embeddedMode && window.parent !== window) {
@@ -511,11 +518,11 @@ function sendDataToQualtrics() {
                             cm_num_trials: individualTrialData.length
                         }
                     }, '*');
-                    console.log("Individual trial data sent to parent window (Qualtrics)");
+                    console.log("Updated trial data sent to parent window (Qualtrics)");
                     return individualTrialData;
                 } else {
                     // Old behavior for redirect mode - store in localStorage
-                    console.log("Running in redirect mode - storing individual trial data");
+                    console.log("Running in redirect mode - storing updated trial data");
                     localStorage.setItem('cm_task_completed_' + responseID, 'true');
                     localStorage.setItem('cm_trial_data_' + responseID, JSON.stringify(individualTrialData));
                     return individualTrialData;
@@ -565,7 +572,7 @@ function sendDataToQualtrics() {
                     console.log('Data key:', 'cm_task_data_' + responseID);
                     
                     // Show completion message
-                    document.body.innerHTML = '<div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;"><h2 style="color: #28a745;">Task Complete!</h2><p style="font-size: 18px; margin: 20px 0;">Your data has been saved successfully.</p><div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin: 20px auto; max-width: 600px;"><h3 style="color: #333; margin-top: 0;">Data Summary:</h3><p><strong>Total Trials:</strong> ' + cmData.cm_total_trials + '</p><p><strong>Average Go RT:</strong> ' + cmData.cm_avg_go_rt + 'ms</p><p><strong>Blocks Completed:</strong> ' + cmData.cm_blocks_completed + '</p><p><strong>Browser:</strong> ' + cmData.cm_browser_name + '</p></div><div style="background: #d1ecf1; border: 1px solid #bee5eb; border-radius: 8px; padding: 15px; margin: 20px auto; max-width: 600px;"><p style="margin: 0; color: #0c5460;"><strong>Next Steps:</strong><br>1. Return to the survey tab<br>2. The page will automatically refresh<br>3. Click "Next" to continue the survey</p></div><button onclick="window.close()" style="padding: 12px 24px; font-size: 16px; background: #007ACC; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 10px;">Close This Tab</button><button onclick="returnToSurvey()" style="padding: 12px 24px; font-size: 16px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 10px;">Return to Survey</button></div>';
+                    document.body.innerHTML = '<div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;"><h2 style="color: #28a745;">Task Complete!</h2><p style="font-size: 18px; margin: 20px 0;">Your data has been saved successfully.</p><div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin: 20px auto; max-width: 600px;"><h3 style="color: #333; margin-top: 0;">Data Summary:</h3><p><strong>Total Trials:</strong> ' + cmData.length + '</p><p><strong>Browser:</strong> ' + getBrowserInfo().browser + '</p></div><div style="background: #d1ecf1; border: 1px solid #bee5eb; border-radius: 8px; padding: 15px; margin: 20px auto; max-width: 600px;"><p style="margin: 0; color: #0c5460;"><strong>Next Steps:</strong><br>1. Return to the survey tab<br>2. The page will automatically refresh<br>3. Click "Next" to continue the survey</p></div><button onclick="window.close()" style="padding: 12px 24px; font-size: 16px; background: #007ACC; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 10px;">Close This Tab</button><button onclick="returnToSurvey()" style="padding: 12px 24px; font-size: 16px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 10px;">Return to Survey</button></div>';
                     
                     // Add function to return to survey (if opened from same domain)
                     window.returnToSurvey = function() {
