@@ -10,15 +10,12 @@
  *
  *
  **/
-console.log("Plugin version: UPDATED_2025_START_STOP_SIGNALS");
 
 var stimuli = [];
 
 jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
 
   var plugin = {};
-
-  //jsPsych.pluginAPI.registerPreload('custom-continuous-movement-plugin', 'stimulus', 'image');
 
   plugin.info = {
     name: 'custom-continuous-movement-plugin',
@@ -82,6 +79,10 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
   }
 
   plugin.trial = function(display_element, trial) {
+    // Initialize timestamp variables at the top - ALWAYS defined
+    var start_signal = null;
+    var stop_signal = null;
+    
     // setup audio with error handling
     var source = null;
     var audio = null;
@@ -117,19 +118,15 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
     }
     
     var stop_time = null;
-    var interval = null;  // interval time for checking for stop
-    var tmp_RT = null;  // variable for storing old RT to check if changed
+    var interval = null;
+    var tmp_RT = null;
     
     // Movement stop detection variables
     var last_mouse_time = null;
     var movement_check_interval = null;
-    var movement_threshold = 100; // milliseconds without movement to consider "stopped"
+    var movement_threshold = 100;
     var movement_stopped = false;
-    var actual_stop_time = null; // When movement actually stopped
-    
-    // Timestamp variables for signal appearances
-    var start_signal = null; // Timestamp when start signal appears on screen
-    var stop_signal = null;  // Timestamp when stop signal appears on screen
+    var actual_stop_time = null;
     
     if (trial.trial_type == 'stop') {
       stop_time = myrng() * (trial.time - 1 - trial.t_stop_min) + trial.t_stop_min;
@@ -138,32 +135,32 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
     // Fix stimulus (hide photodiode)
     var fix = '<img src="' + fix_stim + '"id="jspsych-image-keyboard-response-stimulus"></img>';
 
-   var stimuli = [];
+    var stimuli = [];
 
     // Start stimulus (show photodiode) 
     stimuli.push('<img src="' + start_stim + '"id="jspsych-image-keyboard-response-stimulus"></img>');
 
     // if shown stop at end of countdown
     var my_stop_time = 1000; 
-   // Go stimuli (show photodiode)
+    // Go stimuli (show photodiode)
     for (i = trial.time; i > 0; i--) {
     if (stop_time == null || i > stop_time) {
       stimuli.push('<img src="' + go_stim[i - 1] + '"id="jspsych-image-keyboard-response-stimulus"></img>');
     } else {
       if (stop_time !== null) {
-         my_stop_time = parseInt((i + 1 - stop_time) * 1000); // need to go back one
+         my_stop_time = parseInt((i + 1 - stop_time) * 1000);
         break;
        }
      }
    }
 
-  // Stop stimulus (show photodiode)
-   var stop = '<img src="' + stop_stim + '"id="jspsych-image-keyboard-response-stimulus"></img>';
+    // Stop stimulus (show photodiode)
+    var stop = '<img src="' + stop_stim + '"id="jspsych-image-keyboard-response-stimulus"></img>';
     
-      // add prompt
-      if (trial.prompt !== null){
-        stimuli[i] += trial.prompt;
-      }
+    // add prompt
+    if (trial.prompt !== null){
+      stimuli[i] += trial.prompt;
+    }
 
     // draw the first images
     display_element.innerHTML = fix;
@@ -178,7 +175,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       go_times: [],
       stop_pos_x: [],
       stop_pos_y: [],
-      stop_times: [], // This now stores actual timestamps when participant stops moving
+      stop_times: [],
       exclude: null,
       wrong_way: 0,
       incorrect_movement: 0,
@@ -189,28 +186,19 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
     var detect_movement_stop = function() {
       var current_time = performance.now();
       
-      // If enough time has passed without movement, consider it stopped
       if (last_mouse_time && !movement_stopped && (current_time - last_mouse_time) >= movement_threshold) {
-        // Record the stop time (when they actually stopped moving)
-        // Convert to seconds to match existing data format
         actual_stop_time = (last_mouse_time - start_time) / 1000;
         movement_stopped = true;
-        
-        // Add the actual stop timestamp to stop_times
         response.stop_times.push(last_mouse_time - start_time);
-        
         console.log(`Movement stopped detected at: ${actual_stop_time} seconds`);
       }
     };
 
     // Start movement stop detection
     var start_movement_detection = function() {
-      // Reset variables
       last_mouse_time = null;
       actual_stop_time = null;
       movement_stopped = false;
-      
-      // Check for movement stop every 20ms
       movement_check_interval = setInterval(detect_movement_stop, 20);
     };
 
@@ -245,10 +233,8 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       // Determine the stop_time to record
       var recorded_stop_time;
       if (trial.trial_type === 'go') {
-        // For go trials, use the detected movement stop time
         recorded_stop_time = actual_stop_time;
       } else {
-        // For stop trials, use the original stop_time (when stop signal appeared)
         recorded_stop_time = stop_time;
       }
 
@@ -258,8 +244,8 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         "count": trial.time,
         "stop_time": recorded_stop_time,
         "start_time": start_time,
-        "start_signal": start_signal,  // NEW: Timestamp when start signal appeared
-        "stop_signal": stop_signal,    // NEW: Timestamp when stop signal appeared
+        "start_signal": start_signal,
+        "stop_signal": stop_signal,
         "number_times": number_times,
         "goRT": response.goRT,
         "RT": response.RT,
@@ -268,7 +254,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         "go_times": response.go_times,
         "stop_pos_x": response.stop_pos_x,
         "stop_pos_y": response.stop_pos_y,
-        "stop_times": response.stop_times, // Now contains actual movement stop timestamps
+        "stop_times": response.stop_times,
         "exclude": response.exclude
       };
 
@@ -286,7 +272,6 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       r = Math.sqrt((x - x0) ** 2 + (y - y0) **2);
       theta = Math.atan((y - y0) / (x - x0));
       thetap = Math.atan((yp - y0) / (xp - x0));
-      // check phase wrap around needed
       if (Math.sign(theta) != Math.sign(thetap)) {
         if (theta < 0) {
           theta += Math.PI
@@ -300,7 +285,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       }
       if (theta < thetap) {
         response.wrong_way++;
-      } else if (Math.abs(r - 0.8 * y0) / y0 > 0.5) { //circle is about 80 % of height
+      } else if (Math.abs(r - 0.8 * y0) / y0 > 0.5) {
         response.incorrect_movement++;
       } else if (speed < 1) {
         response.too_slow++;
@@ -312,10 +297,9 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       var now_time = performance.now();
       var x = e.clientX;
       var y = e.clientY;
-      var xp = null;  // previous location
+      var xp = null;
       var yp = null;
 
-      // Update last mouse movement time for stop detection
       last_mouse_time = now_time;
 
       if (go == null) {
@@ -333,14 +317,13 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         response.go_pos_y.push(y);
         response.go_times.push(Math.round(now_time - start_time));
       } else {
-        response.RT = Math.round(now_time - stop_time2); // update time every mouse move
+        response.RT = Math.round(now_time - stop_time2);
         if (response.stop_pos_x.length > 0) {
           xp = response.stop_pos_x[response.stop_pos_x.length - 1];
           yp = response.stop_pos_y[response.stop_pos_y.length - 1];
         }
         response.stop_pos_x.push(x);
         response.stop_pos_y.push(y);
-        // Note: stop_times now only records actual movement stops, not trajectory timestamps
       }
       if (xp !== null) {
         judge_movement(x, y, xp, yp);
@@ -348,19 +331,16 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
     }
 
     var check_no_move = function() {
-      // check if no movement every 30 ms, if so write trigger
       if (response.RT == tmp_RT) {
         trigger_write(15);
         clearInterval(interval);
         console.log('Stop RT was ' + response.RT + ' ms');
         
-        // Record the final stop time if not already recorded
         if (!movement_stopped && response.stop_times.length === 0) {
           response.stop_times.push(performance.now() - start_time);
         }
         
-        // judge if trial should be excluded
-        if (response.RT > 500) {  // will be overwritten by all others, don't have to use
+        if (response.RT > 500) {
           response.exclude = 'remember: try to stop';
         } else if (response.wrong_way / response.go_pos_x.length > 0.25) {
           response.exclude = 'wrong way';
@@ -374,7 +354,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         } else {
           response.exclude = 'no';
         }
-        // give feedback
+        
         if (trial.feedback) {
           display_element.innerHTML = '<p style="font-size: 44px;">' +
             (response.exclude == 'no' ? correct_msg : response.exclude) + '</p>';
@@ -392,28 +372,28 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       }
     }
 
-    // add listener for moving mouse
     document.addEventListener('mousemove', mouse_move_event);
 
     var counter = 0;
     var start_time;
-    if (trial.fixation_duration !== null) {
-      counter += trial.fixation_duration;
-      jsPsych.pluginAPI.setTimeout(function() {
-        display_element.innerHTML = stimuli[0];
-        showPhotodiodeBox();
-        trigger_write(11);
-        
-        // Record timestamp when start signal appears on screen
-        start_signal = performance.now();
-        
-        go = true;
-        start_time = performance.now();
-        
-        // Start movement stop detection when movement begins
-        start_movement_detection();
-      }, counter + trial.fixation_duration)
-    }
+    
+    // FIXED: Always set up the start signal, regardless of fixation_duration
+    var fixation_time = trial.fixation_duration || 0;
+    counter += fixation_time;
+    
+    jsPsych.pluginAPI.setTimeout(function() {
+      display_element.innerHTML = stimuli[0];
+      showPhotodiodeBox();
+      trigger_write(11);
+      
+      // ALWAYS record start_signal timestamp
+      start_signal = performance.now();
+      console.log('Start signal recorded:', start_signal);
+      
+      go = true;
+      start_time = performance.now();
+      start_movement_detection();
+    }, counter);
 
     var number_times = [];
     for (i = 1; i < stimuli.length; i++) {
@@ -436,10 +416,10 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         display_element.innerHTML = stop;
         trigger_write(stop_time == null ? 13 : 14);
         
-        // Record timestamp when stop signal appears on screen
+        // ALWAYS record stop_signal timestamp
         stop_signal = performance.now();
+        console.log('Stop signal recorded:', stop_signal);
         
-        // start audio with error handling
         if(trial.tone !== null) {
           try {
             if(context !== null && source){
@@ -453,14 +433,12 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         }
         go = false;
         stop_time2 = performance.now();
-        // check if stopped
         tmp_RT = response.RT;
         interval = setInterval(function() {
           check_no_move();
         }, 30);
       }, counter);
 
-    // trial duration cap
     if (trial.trial_duration !== null) {
       counter += trial.trial_duration
       jsPsych.pluginAPI.setTimeout(function() {
