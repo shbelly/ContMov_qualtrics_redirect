@@ -340,6 +340,16 @@
                 count = data.count;
                 start_signal = data.start_signal;  // UPDATED: Capture new timestamp
                 stop_signal = data.stop_signal;    // UPDATED: Capture new timestamp
+                
+                // DEBUG: Log the raw data from plugin to see what we're getting
+                console.log('=== DEBUG: Raw plugin data ===');
+                console.log('Trial type:', trial_type);
+                console.log('start_signal type:', typeof data.start_signal, 'value:', data.start_signal);
+                console.log('stop_signal type:', typeof data.stop_signal, 'value:', data.stop_signal);
+                console.log('stop_times type:', typeof data.stop_times, 'value:', data.stop_times);
+                console.log('Is start_signal an array?', Array.isArray(data.start_signal));
+                console.log('Is stop_signal an array?', Array.isArray(data.stop_signal));
+                
                 goRT = data.goRT;
                 RT = data.RT;
                 go_pos_x = data.go_pos_x;
@@ -458,6 +468,29 @@
 
                 // Create individual trial data objects with UPDATED timestamp fields
                 const individualTrialData = trialData.map((trial, index) => {
+                    
+                    // DEBUG: Log what we're processing for each trial
+                    console.log('=== DEBUG: Data being processed for trial', index + 1, '===');
+                    console.log('start_signal from jsPsych:', trial.start_signal, 'type:', typeof trial.start_signal);
+                    console.log('stop_signal from jsPsych:', trial.stop_signal, 'type:', typeof trial.stop_signal);
+                    console.log('Is start_signal array?', Array.isArray(trial.start_signal));
+                    console.log('Is stop_signal array?', Array.isArray(trial.stop_signal));
+                    
+                    // Try to clean up the data if it's somehow an array with one element
+                    let cleanStartSignal = trial.start_signal;
+                    let cleanStopSignal = trial.stop_signal;
+                    
+                    // If it's an array with one element, extract that element
+                    if (Array.isArray(cleanStartSignal) && cleanStartSignal.length === 1) {
+                        cleanStartSignal = cleanStartSignal[0];
+                        console.log('Fixed start_signal from array to:', cleanStartSignal);
+                    }
+                    
+                    if (Array.isArray(cleanStopSignal) && cleanStopSignal.length === 1) {
+                        cleanStopSignal = cleanStopSignal[0];
+                        console.log('Fixed stop_signal from array to:', cleanStopSignal);
+                    }
+                    
                     return {
                         // Participant info
                         participantID: code,
@@ -472,10 +505,10 @@
                         trial_type: trial.trial_type_data,
                         count: trial.count || null,
                         
-                        // UPDATED: Use new timestamp fields instead of stop_time
-                        start_signal: trial.start_signal || null,  // NEW: Timestamp when start signal appeared
-                        stop_signal: trial.stop_signal || null,    // NEW: Timestamp when stop signal appeared
-                        start_time: trial.start_time || null,      // Reference start time
+                        // UPDATED: Use cleaned timestamp fields
+                        start_signal: cleanStartSignal || null,  // Should be single number
+                        stop_signal: cleanStopSignal || null,    // Should be single number
+                        start_time: trial.start_time || null,    // Reference start time
                         
                         // Response data
                         goRT: trial.goRT || null,
@@ -506,7 +539,7 @@
                     };
                 });
 
-                console.log("Sending updated trial data with timestamps:", individualTrialData);
+                console.log("Sending cleaned trial data with timestamps:", individualTrialData);
 
                 // If running in embedded mode (iframe), send completion message to parent (Qualtrics)
                 if (embeddedMode && window.parent !== window) {
@@ -518,11 +551,11 @@
                             cm_num_trials: individualTrialData.length
                         }
                     }, '*');
-                    console.log("Updated trial data sent to parent window (Qualtrics)");
+                    console.log("Cleaned trial data sent to parent window (Qualtrics)");
                     return individualTrialData;
                 } else {
                     // Old behavior for redirect mode - store in localStorage
-                    console.log("Running in redirect mode - storing updated trial data");
+                    console.log("Running in redirect mode - storing cleaned trial data");
                     localStorage.setItem('cm_task_completed_' + responseID, 'true');
                     localStorage.setItem('cm_trial_data_' + responseID, JSON.stringify(individualTrialData));
                     return individualTrialData;
