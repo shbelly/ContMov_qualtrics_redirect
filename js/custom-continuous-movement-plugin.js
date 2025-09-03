@@ -95,12 +95,12 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
     
     // ===== FIXED: Track all intervals and timeouts for proper cleanup =====
     var active_intervals = [];
-    var active_timeouts = [];
+    var active_standard_timeouts = [];  // For regular setTimeout calls
     
     // ===== FIXED: Custom timeout/interval functions that track themselves =====
     var safe_setTimeout = function(callback, delay) {
       var timeoutId = jsPsych.pluginAPI.setTimeout(callback, delay);
-      active_timeouts.push(timeoutId);
+      // jsPsych manages these automatically, no need to track
       return timeoutId;
     };
     
@@ -110,20 +110,27 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       return intervalId;
     };
     
+    // Standard setTimeout for non-jsPsych timeouts
+    var standard_setTimeout = function(callback, delay) {
+      var timeoutId = setTimeout(callback, delay);
+      active_standard_timeouts.push(timeoutId);
+      return timeoutId;
+    };
+    
     var cleanup_all = function() {
-      // Clear all intervals
+      // Clear all custom intervals
       active_intervals.forEach(function(id) {
         clearInterval(id);
       });
       active_intervals = [];
       
-      // Clear all timeouts
-      active_timeouts.forEach(function(id) {
-        jsPsych.pluginAPI.clearTimeout(id);
+      // Clear all standard timeouts
+      active_standard_timeouts.forEach(function(id) {
+        clearTimeout(id);
       });
-      active_timeouts = [];
+      active_standard_timeouts = [];
       
-      // Clear any remaining jsPsych timeouts
+      // Clear jsPsych-managed timeouts
       jsPsych.pluginAPI.clearAllTimeouts();
     };
     
