@@ -701,28 +701,32 @@
             }
         };
 
-        // ===== COMPLETELY REBUILT TIMELINE - NO DUPLICATION =====
+        // ===== ULTRA-SIMPLIFIED FLAT TIMELINE - ZERO NESTING =====
         
-        // 1. Start procedure (welcome, fullscreen, instructions)
-        console.log('=== BUILDING TIMELINE ===');
+        console.log('=== BUILDING COMPLETELY FLAT TIMELINE ===');
+        
+        // Build timeline as single flat array - no nesting whatsoever
+        var flatTimeline = [];
+        
+        // 1. Start procedure
         if (embeddedMode) {
-            timeline.push(welcome, instructions);
-            console.log('Added start procedure (embedded mode)');
+            flatTimeline.push(welcome, instructions);
+            console.log('Added: welcome, instructions');
         } else {
-            timeline.push(welcome, fullscr, instructions);
-            console.log('Added start procedure (fullscreen mode)');
+            flatTimeline.push(welcome, fullscr, instructions);
+            console.log('Added: welcome, fullscr, instructions');
         }
 
-        // 2. Practice block (block_ind = 0, with feedback)
-        console.log('Creating practice block with', n_practice_trials, 'trials');
+        // 2. Practice block
+        console.log('Building practice block with', n_practice_trials, 'trials...');
         var practice_design = createTrialDesign(n_practice_trials);
         
-        // Add practice block start
-        timeline.push(block_start, block_get_ready);
+        flatTimeline.push(block_start, block_get_ready);
+        console.log('Added: practice block_start, block_get_ready');
         
-        // Add each practice trial individually to avoid duplication
         for (let i = 0; i < practice_design.length; i++) {
-            let practice_trial = {
+            // Create completely unique trial object for each practice trial
+            flatTimeline.push({
                 type: 'custom-continuous-movement-plugin',
                 fixation_duration: FIX,
                 time: practice_design[i].time,
@@ -730,13 +734,12 @@
                 trial_type: practice_design[i].trial_type,
                 trial_duration: MAXRT,
                 tone: tone_stim,
-                feedback: true, // Practice block always has feedback
+                feedback: function() { return block_ind == 0 },
                 feedback_duration: iFBT,
                 iti: ITI,
                 data: {
-                    block_i: 0, // Practice block
+                    block_i: 0,
                     trial_i: i + 1,
-                    time: practice_design[i].time,
                     trial_type_data: practice_design[i].trial_type
                 },
                 on_start: function(data) {  
@@ -749,11 +752,6 @@
                     count = data.count;
                     start_signal = data.start_signal;
                     stop_signal = data.stop_signal;
-                    
-                    console.log('=== Practice Trial', data.trial_i || trial_ind, 'completed ===');
-                    console.log('Trial type:', trial_type);
-                    console.log('start_signal:', typeof data.start_signal, data.start_signal);
-                    console.log('stop_signal:', typeof data.stop_signal, data.stop_signal);
                     
                     goRT = data.goRT;
                     RT = data.RT;
@@ -788,26 +786,26 @@
                         av_ssRT += RT;
                     }
                 }
-            };
+            });
             
-            timeline.push(practice_trial, iti);
+            // Add ITI after each trial
+            flatTimeline.push(iti);
         }
         
-        // Add practice block feedback
-        timeline.push(block_feedback);
-        console.log('Added practice block: start + ' + practice_design.length + ' trials + feedback');
+        flatTimeline.push(block_feedback);
+        console.log('Added:', practice_design.length, 'practice trials + feedback');
 
-        // 3. Experimental blocks (block_ind = 1, 2, ..., no feedback on trials)
+        // 3. Experimental blocks
         for (let blockNum = 1; blockNum <= n_blocks_exp; blockNum++) {
-            console.log('Creating experimental block', blockNum, 'with', n_trials_per_block, 'trials');
+            console.log('Building experimental block', blockNum, 'with', n_trials_per_block, 'trials...');
             var exp_design = createTrialDesign(n_trials_per_block);
             
-            // Add block start
-            timeline.push(block_start, block_get_ready);
+            flatTimeline.push(block_start, block_get_ready);
+            console.log('Added: exp block', blockNum, 'start, get_ready');
             
-            // Add each experimental trial individually
             for (let i = 0; i < exp_design.length; i++) {
-                let exp_trial = {
+                // Create completely unique trial object for each experimental trial
+                flatTimeline.push({
                     type: 'custom-continuous-movement-plugin',
                     fixation_duration: FIX,
                     time: exp_design[i].time,
@@ -815,13 +813,12 @@
                     trial_type: exp_design[i].trial_type,
                     trial_duration: MAXRT,
                     tone: tone_stim,
-                    feedback: false, // No feedback in experimental blocks
+                    feedback: function() { return block_ind == 0 }, // No feedback for experimental
                     feedback_duration: iFBT,
                     iti: ITI,
                     data: {
-                        block_i: blockNum, // Experimental block number
+                        block_i: blockNum,
                         trial_i: i + 1,
-                        time: exp_design[i].time,
                         trial_type_data: exp_design[i].trial_type
                     },
                     on_start: function(data) {  
@@ -834,11 +831,6 @@
                         count = data.count;
                         start_signal = data.start_signal;
                         stop_signal = data.stop_signal;
-                        
-                        console.log('=== Experimental Trial', data.trial_i || (trial_ind - n_practice_trials), 'Block', data.block_i, 'completed ===');
-                        console.log('Trial type:', trial_type);
-                        console.log('start_signal:', typeof data.start_signal, data.start_signal);
-                        console.log('stop_signal:', typeof data.stop_signal, data.stop_signal);
                         
                         goRT = data.goRT;
                         RT = data.RT;
@@ -873,47 +865,56 @@
                             av_ssRT += RT;
                         }
                     }
-                };
+                });
                 
-                timeline.push(exp_trial, iti);
+                // Add ITI after each trial
+                flatTimeline.push(iti);
             }
             
-            // Add experimental block feedback
-            timeline.push(block_feedback);
-            console.log('Added experimental block', blockNum + ': start + ' + exp_design.length + ' trials + feedback');
+            flatTimeline.push(block_feedback);
+            console.log('Added:', exp_design.length, 'exp trials + feedback for block', blockNum);
         }
 
-        // 4. End procedure (fullscreen off, goodbye)
+        // 4. End procedure
         if (embeddedMode) {
-            timeline.push(goodbye);
-            console.log('Added end procedure (embedded mode)');
+            flatTimeline.push(goodbye);
+            console.log('Added: goodbye (embedded)');
         } else {
-            timeline.push(fullscr_off, goodbye);
-            console.log('Added end procedure (fullscreen mode)');
+            flatTimeline.push(fullscr_off, goodbye);
+            console.log('Added: fullscr_off, goodbye');
         }
 
-        // 5. Timeline summary and validation
-        console.log('=== FINAL TIMELINE SUMMARY ===');
+        // 5. Assign the flat timeline and validate
+        timeline = flatTimeline;
+        
+        console.log('=== TIMELINE VALIDATION ===');
         console.log('Total timeline elements:', timeline.length);
         
-        // Count actual trial elements
         let trialCount = 0;
-        timeline.forEach(function(element) {
+        let itiCount = 0;
+        let otherCount = 0;
+        
+        timeline.forEach(function(element, index) {
             if (element.type === 'custom-continuous-movement-plugin') {
                 trialCount++;
+                console.log('Trial', trialCount, 'at index', index, '- Block:', element.data ? element.data.block_i : 'unknown', 'Type:', element.trial_type);
+            } else if (element.type === 'html-keyboard-response' && element.stimulus === '') {
+                itiCount++;
+            } else {
+                otherCount++;
             }
         });
         
-        console.log('Practice trials:', n_practice_trials);
-        console.log('Experimental blocks:', n_blocks_exp);
-        console.log('Trials per experimental block:', n_trials_per_block);
-        console.log('Expected total trials:', n_practice_trials + (n_blocks_exp * n_trials_per_block));
-        console.log('Actual trial elements in timeline:', trialCount);
+        console.log('=== FINAL COUNTS ===');
+        console.log('Expected trials:', n_practice_trials + (n_blocks_exp * n_trials_per_block));
+        console.log('Actual trials:', trialCount);
+        console.log('ITI elements:', itiCount);
+        console.log('Other elements (starts, feedback, etc.):', otherCount);
         
-        if (trialCount !== (n_practice_trials + (n_blocks_exp * n_trials_per_block))) {
-            console.error('TIMELINE ERROR: Trial count mismatch!');
+        if (trialCount === (n_practice_trials + (n_blocks_exp * n_trials_per_block))) {
+            console.log('✓ TIMELINE IS CORRECT - NO DUPLICATES');
         } else {
-            console.log('✓ Timeline trial count is correct');
+            console.error('❌ TIMELINE ERROR: Expected', n_practice_trials + (n_blocks_exp * n_trials_per_block), 'but got', trialCount);
         }
 
         // ===== START EXPERIMENT =====
