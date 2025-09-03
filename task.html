@@ -125,8 +125,8 @@
         var trial_type = null;
         var count = null;
         var start_time = null;
-        var start_signal = null;  // UPDATED: New timestamp variable
-        var stop_signal = null;   // UPDATED: New timestamp variable
+        var start_signal = null;
+        var stop_signal = null;
         var goRT = null;
         var RT = null;
         var go_pos_x = null;
@@ -267,8 +267,8 @@
                 block: block_ind,
                 trial: trial_ind,
                 type: trial_type,
-                start_signal: start_signal,  // UPDATED
-                stop_signal: stop_signal,    // UPDATED
+                start_signal: start_signal,
+                stop_signal: stop_signal,
                 goRT: goRT,
                 RT: RT,
                 exclude: exclude
@@ -338,17 +338,14 @@
             on_finish: function(data) {
                 trial_type = data.trial_type_data || data.trial_type;
                 count = data.count;
-                start_signal = data.start_signal;  // UPDATED: Capture new timestamp
-                stop_signal = data.stop_signal;    // UPDATED: Capture new timestamp
+                start_signal = data.start_signal;
+                stop_signal = data.stop_signal;
                 
-                // DEBUG: Log the raw data from plugin to see what we're getting
+                // DEBUG: Log the raw data from plugin
                 console.log('=== DEBUG: Raw plugin data ===');
                 console.log('Trial type:', trial_type);
                 console.log('start_signal type:', typeof data.start_signal, 'value:', data.start_signal);
                 console.log('stop_signal type:', typeof data.stop_signal, 'value:', data.stop_signal);
-                console.log('stop_times type:', typeof data.stop_times, 'value:', data.stop_times);
-                console.log('Is start_signal an array?', Array.isArray(data.start_signal));
-                console.log('Is stop_signal an array?', Array.isArray(data.stop_signal));
                 
                 goRT = data.goRT;
                 RT = data.RT;
@@ -466,29 +463,71 @@
                 // Get browser and system info
                 const browserInfo = getBrowserInfo();
 
-                // Create individual trial data objects with UPDATED timestamp fields
+                // Create individual trial data objects with IMPROVED timestamp handling
                 const individualTrialData = trialData.map((trial, index) => {
                     
                     // DEBUG: Log what we're processing for each trial
                     console.log('=== DEBUG: Data being processed for trial', index + 1, '===');
                     console.log('start_signal from jsPsych:', trial.start_signal, 'type:', typeof trial.start_signal);
                     console.log('stop_signal from jsPsych:', trial.stop_signal, 'type:', typeof trial.stop_signal);
-                    console.log('Is start_signal array?', Array.isArray(trial.start_signal));
-                    console.log('Is stop_signal array?', Array.isArray(trial.stop_signal));
+                    console.log('trial_type:', trial.trial_type_data);
                     
-                    // Try to clean up the data if it's somehow an array with one element
-                    let cleanStartSignal = trial.start_signal;
-                    let cleanStopSignal = trial.stop_signal;
+                    // IMPROVED: More careful timestamp processing
+                    let processedStartSignal = null;
+                    let processedStopSignal = null;
                     
-                    // If it's an array with one element, extract that element
-                    if (Array.isArray(cleanStartSignal) && cleanStartSignal.length === 1) {
-                        cleanStartSignal = cleanStartSignal[0];
-                        console.log('Fixed start_signal from array to:', cleanStartSignal);
+                    // Handle start_signal
+                    if (trial.start_signal !== undefined && trial.start_signal !== null) {
+                        if (Array.isArray(trial.start_signal)) {
+                            // If it's an array, take the first valid number
+                            const validStart = trial.start_signal.find(val => typeof val === 'number' && !isNaN(val));
+                            processedStartSignal = validStart || null;
+                            console.log('Processed start_signal from array:', processedStartSignal);
+                        } else if (typeof trial.start_signal === 'number' && !isNaN(trial.start_signal)) {
+                            processedStartSignal = trial.start_signal;
+                        } else {
+                            console.warn('Invalid start_signal type:', typeof trial.start_signal, trial.start_signal);
+                        }
                     }
                     
-                    if (Array.isArray(cleanStopSignal) && cleanStopSignal.length === 1) {
-                        cleanStopSignal = cleanStopSignal[0];
-                        console.log('Fixed stop_signal from array to:', cleanStopSignal);
+                    // Handle stop_signal - only process for stop trials
+                    if (trial.trial_type_data === 'stop' && trial.stop_signal !== undefined && trial.stop_signal !== null) {
+                        if (Array.isArray(trial.stop_signal)) {
+                            // If it's an array, take the first valid number
+                            const validStop = trial.stop_signal.find(val => typeof val === 'number' && !isNaN(val));
+                            processedStopSignal = validStop || null;
+                            console.log('Processed stop_signal from array:', processedStopSignal);
+                        } else if (typeof trial.stop_signal === 'number' && !isNaN(trial.stop_signal)) {
+                            processedStopSignal = trial.stop_signal;
+                        } else {
+                            console.warn('Invalid stop_signal type:', typeof trial.stop_signal, trial.stop_signal);
+                        }
+                    } else if (trial.trial_type_data === 'go') {
+                        // Go trials should have null stop_signal
+                        processedStopSignal = null;
+                        console.log('Go trial - stop_signal set to null');
+                    }
+                    
+                    // Validate that we have reasonable timestamp values
+                    if (processedStartSignal !== null && processedStartSignal < 0) {
+                        console.warn('Invalid start_signal value (negative):', processedStartSignal);
+                        processedStartSignal = null;
+                    }
+                    
+                    if (processedStopSignal !== null && processedStopSignal < 0) {
+                        console.warn('Invalid stop_signal value (negative):', processedStopSignal);
+                        processedStopSignal = null;
+                    }
+                    
+                    // Check for duplicate timestamps across trials
+                    if (index > 0 && individualTrialData[index - 1]) {
+                        const prevTrial = individualTrialData[index - 1];
+                        if (processedStartSignal === prevTrial.start_signal && processedStartSignal !== null) {
+                            console.warn('DUPLICATE start_signal detected:', processedStartSignal, 'in trials', index, 'and', index + 1);
+                        }
+                        if (processedStopSignal === prevTrial.stop_signal && processedStopSignal !== null) {
+                            console.warn('DUPLICATE stop_signal detected:', processedStopSignal, 'in trials', index, 'and', index + 1);
+                        }
                     }
                     
                     return {
@@ -505,22 +544,22 @@
                         trial_type: trial.trial_type_data,
                         count: trial.count || null,
                         
-                        // UPDATED: Use cleaned timestamp fields
-                        start_signal: cleanStartSignal || null,  // Should be single number
-                        stop_signal: cleanStopSignal || null,    // Should be single number
-                        start_time: trial.start_time || null,    // Reference start time
+                        // IMPROVED: Use carefully processed timestamp fields
+                        start_signal: processedStartSignal,
+                        stop_signal: processedStopSignal,
+                        start_time: trial.start_time || null,
                         
                         // Response data
                         goRT: trial.goRT || null,
                         RT: trial.RT || null,
                         
-                        // Movement data (as JSON strings, matching your format)
+                        // Movement data (as JSON strings)
                         go_pos_x: trial.go_pos_x ? JSON.stringify(trial.go_pos_x) : null,
                         go_pos_y: trial.go_pos_y ? JSON.stringify(trial.go_pos_y) : null,
                         go_times: trial.go_times ? JSON.stringify(trial.go_times) : null,
                         stop_pos_x: trial.stop_pos_x ? JSON.stringify(trial.stop_pos_x) : null,
                         stop_pos_y: trial.stop_pos_y ? JSON.stringify(trial.stop_pos_y) : null,
-                        stop_times: trial.stop_times ? JSON.stringify(trial.stop_times) : null,  // When participants actually stopped
+                        stop_times: trial.stop_times ? JSON.stringify(trial.stop_times) : null,
                         
                         // Trial outcome
                         exclude: trial.exclude || 'no',
@@ -539,7 +578,22 @@
                     };
                 });
 
-                console.log("Sending cleaned trial data with timestamps:", individualTrialData);
+                // ADDITIONAL: Validate for duplicates across the entire dataset
+                console.log("=== CHECKING FOR DUPLICATE TIMESTAMPS ===");
+                const startSignals = individualTrialData.map(t => t.start_signal).filter(s => s !== null);
+                const stopSignals = individualTrialData.map(t => t.stop_signal).filter(s => s !== null);
+                
+                const duplicateStarts = startSignals.filter((item, index) => startSignals.indexOf(item) !== index);
+                const duplicateStops = stopSignals.filter((item, index) => stopSignals.indexOf(item) !== index);
+                
+                if (duplicateStarts.length > 0) {
+                    console.warn('DUPLICATE START SIGNALS FOUND:', duplicateStarts);
+                }
+                if (duplicateStops.length > 0) {
+                    console.warn('DUPLICATE STOP SIGNALS FOUND:', duplicateStops);
+                }
+
+                console.log("Sending processed trial data with improved timestamps:", individualTrialData);
 
                 // If running in embedded mode (iframe), send completion message to parent (Qualtrics)
                 if (embeddedMode && window.parent !== window) {
@@ -551,11 +605,11 @@
                             cm_num_trials: individualTrialData.length
                         }
                     }, '*');
-                    console.log("Cleaned trial data sent to parent window (Qualtrics)");
+                    console.log("Processed trial data sent to parent window (Qualtrics)");
                     return individualTrialData;
                 } else {
                     // Old behavior for redirect mode - store in localStorage
-                    console.log("Running in redirect mode - storing cleaned trial data");
+                    console.log("Running in redirect mode - storing processed trial data");
                     localStorage.setItem('cm_task_completed_' + responseID, 'true');
                     localStorage.setItem('cm_trial_data_' + responseID, JSON.stringify(individualTrialData));
                     return individualTrialData;
