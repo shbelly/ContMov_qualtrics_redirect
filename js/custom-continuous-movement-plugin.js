@@ -416,6 +416,12 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
     // show stop at end
     var stop_time2;
     counter += my_stop_time;
+    
+    // DEBUG: Log the exact timing calculation
+    console.log('PLUGIN: Scheduling stop signal in', my_stop_time, 'ms from countdown start');
+    console.log('PLUGIN: Total counter value:', counter);
+    console.log('PLUGIN: Current time when scheduling:', performance.now());
+    
     jsPsych.pluginAPI.setTimeout(function() {
         display_element.innerHTML = stop;
         trigger_write(stop_time == null ? 13 : 14);
@@ -423,7 +429,14 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         // ===== FIXED: Record stop_signal timestamp when it actually appears =====
         stop_signal_timestamp = performance.now();
         
-        console.log('PLUGIN: Stop signal appearing at:', stop_signal_timestamp);
+        console.log('PLUGIN: Stop signal ACTUALLY appeared at:', stop_signal_timestamp);
+        console.log('PLUGIN: Expected vs actual timing check - scheduled for counter:', counter);
+        
+        if (trial.trial_type === 'stop') {
+            console.log('PLUGIN: Stop signal appearing at:', stop_signal_timestamp, '(STOP TRIAL)');
+        } else {
+            console.log('PLUGIN: Countdown complete at:', stop_signal_timestamp, '(GO TRIAL)');
+        }
         console.log('PLUGIN: Time difference from start:', (stop_signal_timestamp - start_signal_timestamp), 'ms');
         
         if(trial.tone !== null) {
