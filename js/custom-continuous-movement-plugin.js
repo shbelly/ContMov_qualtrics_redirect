@@ -4,7 +4,7 @@
  * modified by Sara Parmigiani (2025)
 * based on:
 * jspsych-image-keyboard-response
-* by Jby Josh de Leeuw
+* by Josh de Leeuw
  *
  * plugin for displaying a countdown with a stop potentially interjected
  *
@@ -79,16 +79,22 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
   }
 
   plugin.trial = function(display_element, trial) {
-    // Initialize timestamp variables - these will record when signals actually appear
-    var start_signal = null;
-    var stop_signal = null;
+    // ===== FIXED: Initialize timestamp variables fresh for each trial =====
+    var start_signal_timestamp = null;  // When start signal actually appears
+    var stop_signal_timestamp = null;   // When stop signal actually appears
+    var trial_start_time = null;        // Reference time for the whole trial
+    
+    console.log('=== NEW TRIAL STARTING ===');
+    console.log('Trial type:', trial.trial_type);
+    console.log('Current time at trial start:', performance.now());
     
     // setup audio with error handling
     var source = null;
     var audio = null;
+    var context = null;
     if(trial.tone !== null) {
       try {
-        var context = jsPsych.pluginAPI.audioContext();
+        context = jsPsych.pluginAPI.audioContext();
         if(context !== null){
           source = context.createBufferSource();
           var audioBuffer = jsPsych.pluginAPI.getAudioBuffer(trial.tone);
@@ -187,9 +193,9 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       var current_time = performance.now();
       
       if (last_mouse_time && !movement_stopped && (current_time - last_mouse_time) >= movement_threshold) {
-        actual_stop_time = (last_mouse_time - start_time) / 1000;
+        actual_stop_time = (last_mouse_time - trial_start_time) / 1000;
         movement_stopped = true;
-        response.stop_times.push(last_mouse_time - start_time);
+        response.stop_times.push(last_mouse_time - trial_start_time);
         console.log(`Movement stopped detected at: ${actual_stop_time} seconds`);
       }
     };
@@ -230,13 +236,20 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       // remove mouse listener
       document.removeEventListener('mousemove', mouse_move_event);
 
+      // ===== FIXED: Debug timestamp data before sending =====
+      console.log('=== FINISHING TRIAL ===');
+      console.log('Trial type:', trial.trial_type);
+      console.log('start_signal_timestamp:', start_signal_timestamp);
+      console.log('stop_signal_timestamp:', stop_signal_timestamp);
+      console.log('Time difference:', stop_signal_timestamp ? (stop_signal_timestamp - start_signal_timestamp) : 'N/A', 'ms');
+
       // gather the data to store for the trial
       var trial_data = {
         "trial_type_data": trial.trial_type,
         "count": trial.time,
-        "start_signal": start_signal,     // Timestamp when start signal appeared
-        "stop_signal": stop_signal,       // Timestamp when stop signal appeared  
-        "start_time": start_time,         // Reference start time
+        "start_signal": start_signal_timestamp,    // FIXED: Use the actual timestamp variables
+        "stop_signal": stop_signal_timestamp,      // FIXED: Use the actual timestamp variables
+        "start_time": trial_start_time,            // Reference start time
         "number_times": number_times,
         "goRT": response.goRT,
         "RT": response.RT,
@@ -245,7 +258,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         "go_times": response.go_times,
         "stop_pos_x": response.stop_pos_x,
         "stop_pos_y": response.stop_pos_y,
-        "stop_times": response.stop_times,  // When participants actually stopped moving
+        "stop_times": response.stop_times,
         "exclude": response.exclude
       };
 
@@ -297,7 +310,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         return;
       } else if (go) {
         if (response.go_pos_x.length == 0){
-          response.goRT = Math.round(now_time - start_time);
+          response.goRT = Math.round(now_time - trial_start_time);
           trigger_write(12);
           console.log('Go RT was ' + response.goRT + ' ms');
         } else {
@@ -306,7 +319,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         }
         response.go_pos_x.push(x);
         response.go_pos_y.push(y);
-        response.go_times.push(Math.round(now_time - start_time));
+        response.go_times.push(Math.round(now_time - trial_start_time));
       } else {
         response.RT = Math.round(now_time - stop_time2);
         if (response.stop_pos_x.length > 0) {
@@ -328,7 +341,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         console.log('Stop RT was ' + response.RT + ' ms');
         
         if (!movement_stopped && response.stop_times.length === 0) {
-          response.stop_times.push(performance.now() - start_time);
+          response.stop_times.push(performance.now() - trial_start_time);
         }
         
         if (response.RT > 500) {
@@ -366,7 +379,6 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
     document.addEventListener('mousemove', mouse_move_event);
 
     var counter = 0;
-    var start_time;
     
     // Always set up the start signal, regardless of fixation_duration
     var fixation_time = trial.fixation_duration || 0;
@@ -377,12 +389,13 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       showPhotodiodeBox();
       trigger_write(11);
       
-      // Record start_signal timestamp when start signal actually appears
-      start_signal = performance.now();
-      console.log('Start signal timestamp:', start_signal);
+      // ===== FIXED: Record timestamps when signals actually appear =====
+      start_signal_timestamp = performance.now();
+      trial_start_time = performance.now();  // Set reference time
+      
+      console.log('PLUGIN: Start signal appearing at:', start_signal_timestamp);
       
       go = true;
-      start_time = performance.now();
       start_movement_detection();
     }, counter);
 
@@ -407,9 +420,11 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         display_element.innerHTML = stop;
         trigger_write(stop_time == null ? 13 : 14);
         
-        // Record stop_signal timestamp when stop signal actually appears
-        stop_signal = performance.now();
-        console.log('Stop signal timestamp:', stop_signal);
+        // ===== FIXED: Record stop_signal timestamp when it actually appears =====
+        stop_signal_timestamp = performance.now();
+        
+        console.log('PLUGIN: Stop signal appearing at:', stop_signal_timestamp);
+        console.log('PLUGIN: Time difference from start:', (stop_signal_timestamp - start_signal_timestamp), 'ms');
         
         if(trial.tone !== null) {
           try {
