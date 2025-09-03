@@ -157,20 +157,24 @@
         // Preload stimuli
         var pre_load_stimuli = go_stim.concat([fix_stim, start_stim, stop_stim]);
 
-        // ===== CREATE TRIAL DESIGN =====
-        var trial_types = Array.prototype.concat(
-            Array(Math.ceil(n_trials_per_block / n_secs.length * (1 - stop_prop))).fill('go'),
-            Array(Math.ceil(n_trials_per_block / n_secs.length * stop_prop)).fill('stop')
-        );
+        // ===== CREATE TRIAL DESIGN FUNCTION =====
+        function createTrialDesign(numTrials) {
+            var trial_types = Array.prototype.concat(
+                Array(Math.ceil(numTrials / n_secs.length * (1 - stop_prop))).fill('go'),
+                Array(Math.ceil(numTrials / n_secs.length * stop_prop)).fill('stop')
+            );
 
-        var design = jsPsych.randomization.factorial(
-            {time : n_secs, trial_type: trial_types}, 1
-        );
+            var design = jsPsych.randomization.factorial(
+                {time : n_secs, trial_type: trial_types}, 1
+            );
 
-        if (design.length > n_trials_per_block) {
-            console.log('Cropping ' + (design.length - n_trials_per_block) +
-                        ' trials from the end of the counterbalanced design');
-            design = design.slice(0, n_trials_per_block);
+            if (design.length > numTrials) {
+                console.log('Cropping ' + (design.length - numTrials) +
+                            ' trials from the end of the counterbalanced design');
+                design = design.slice(0, numTrials);
+            }
+            
+            return jsPsych.randomization.shuffle(design);
         }
 
         // ===== SIMPLIFIED FUNCTIONS =====
@@ -296,6 +300,7 @@
             choices: jsPsych.ALL_KEYS,
             on_start: function() {
                 console.log('=== BLOCK START SCREEN ===');
+                console.log('Starting block:', block_ind);
                 console.log('Waiting for ANY keyboard input...');
                 
                 // Simple focus management
@@ -386,14 +391,14 @@
             type: 'html-keyboard-response',
             trial_duration: bFBT,
             choices: function() {
-                if (block_ind == n_blocks_exp){
+                if (block_ind >= n_blocks_exp){
                     return ['p', 'space']
                 } else {
                     return ['p']
                 }
             },
             stimulus: function() {
-                if (block_ind == n_blocks_exp){
+                if (block_ind >= n_blocks_exp){
                     var next_block_text = final_block_msg
                 } else {
                     var count = (bFBT / 1000);
@@ -425,8 +430,11 @@
                 ]
             },
             on_finish: function() {
+                // Reset trial counter and increment block counter
                 trial_ind = 1;
                 block_ind = block_ind + 1;
+                
+                // Reset block feedback variables
                 n_stop = 0;
                 n_go = 0;
                 inc = 0;
@@ -435,17 +443,8 @@
                 av_goRT = 0;
                 av_ssRT = 0;
                 early_ns = 0;
-            }
-        };
-
-        var evaluate_end_if_practice = {
-            type: 'call-function',
-            func: function() {
-                if (block_ind == 0) {
-                    if (trial_ind > n_practice_trials) {
-                        jsPsych.endCurrentTimeline();
-                    }
-                }
+                
+                console.log('Block feedback finished. New block_ind:', block_ind);
             }
         };
 
@@ -518,8 +517,6 @@
                         console.warn('Invalid stop_signal value (negative):', processedStopSignal);
                         processedStopSignal = null;
                     }
-                    
-                    // Note: We'll check for duplicates after the array is fully constructed
                     
                     return {
                         // Participant info
@@ -704,46 +701,55 @@
             }
         };
 
-        // ===== BUILD TIMELINE =====
-        // Conditional timeline based on embedded mode
-        var start_timeline;
+        // ===== SIMPLIFIED TIMELINE CONSTRUCTION =====
+        
+        // Start procedure (welcome, fullscreen, instructions)
         if (embeddedMode) {
-            // Skip fullscreen for embedded mode
-            start_timeline = [welcome, instructions];
+            timeline.push(welcome, instructions);
         } else {
-            start_timeline = [welcome, fullscr, instructions];
+            timeline.push(welcome, fullscr, instructions);
         }
 
-        var start_procedure = {
-            timeline: start_timeline,
+        // Practice block (block 0)
+        console.log('Creating practice block with', n_practice_trials, 'trials');
+        var practice_design = createTrialDesign(n_practice_trials);
+        var practice_trials = {
+            timeline: [stimulus, iti],
+            timeline_variables: practice_design
         };
-
-        var trial_procedure = {
-            timeline: [stimulus, iti, evaluate_end_if_practice],
-            timeline_variables: design,
-            randomize_order: true,
-            repetitions: 1,
+        var practice_block = {
+            timeline: [block_start, block_get_ready, practice_trials, block_feedback]
         };
+        timeline.push(practice_block);
 
-        var block_procedure = {
-            timeline: [block_start, block_get_ready, trial_procedure, block_feedback],
-            randomize_order: false,
-            repetitions: n_blocks_exp + 1,
-        };
-
-        var end_procedure;
-        if (embeddedMode) {
-            // Skip fullscreen exit for embedded mode
-            end_procedure = {
-                timeline: [goodbye],
+        // Experimental blocks (blocks 1, 2, ...)
+        for (let blockNum = 1; blockNum <= n_blocks_exp; blockNum++) {
+            console.log('Creating experimental block', blockNum, 'with', n_trials_per_block, 'trials');
+            var exp_design = createTrialDesign(n_trials_per_block);
+            var exp_trials = {
+                timeline: [stimulus, iti],
+                timeline_variables: exp_design
             };
-        } else {
-            end_procedure = {
-                timeline: [fullscr_off, goodbye],
+            var exp_block = {
+                timeline: [block_start, block_get_ready, exp_trials, block_feedback]
             };
+            timeline.push(exp_block);
         }
 
-        timeline.push(start_procedure, block_procedure, end_procedure);
+        // End procedure (fullscreen off, goodbye)
+        if (embeddedMode) {
+            timeline.push(goodbye);
+        } else {
+            timeline.push(fullscr_off, goodbye);
+        }
+
+        console.log('=== TIMELINE SUMMARY ===');
+        console.log('Total timeline length:', timeline.length);
+        console.log('Practice trials:', n_practice_trials);
+        console.log('Experimental blocks:', n_blocks_exp);
+        console.log('Trials per experimental block:', n_trials_per_block);
+        console.log('Total experimental trials:', n_blocks_exp * n_trials_per_block);
+        console.log('Total all trials:', n_practice_trials + (n_blocks_exp * n_trials_per_block));
 
         // ===== START EXPERIMENT =====
         jsPsych.init({
