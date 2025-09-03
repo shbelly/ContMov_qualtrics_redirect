@@ -519,16 +519,7 @@
                         processedStopSignal = null;
                     }
                     
-                    // Check for duplicate timestamps across trials
-                    if (index > 0 && individualTrialData[index - 1]) {
-                        const prevTrial = individualTrialData[index - 1];
-                        if (processedStartSignal === prevTrial.start_signal && processedStartSignal !== null) {
-                            console.warn('DUPLICATE start_signal detected:', processedStartSignal, 'in trials', index, 'and', index + 1);
-                        }
-                        if (processedStopSignal === prevTrial.stop_signal && processedStopSignal !== null) {
-                            console.warn('DUPLICATE stop_signal detected:', processedStopSignal, 'in trials', index, 'and', index + 1);
-                        }
-                    }
+                    // Note: We'll check for duplicates after the array is fully constructed
                     
                     return {
                         // Participant info
