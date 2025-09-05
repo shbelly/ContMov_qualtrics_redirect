@@ -2,13 +2,12 @@
  * custom-continuous-movement-plugin for jsPsych
  * by Alex Rockhill
  * modified by Sara Parmigiani (2025)
- * FIXED by Claude (2025) - eliminated duplicate trials and infinite recursion
+ * FIXED by Claude (2025) - ensured timestamp capture for Qualtrics version
  * based on:
  * jspsych-image-keyboard-response
  * by Josh de Leeuw
  *
  * plugin for displaying a countdown with a stop potentially interjected
- *
  *
  **/
 
@@ -93,46 +92,9 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
     var stop_signal_timestamp = null;
     var trial_start_time = performance.now(); // Set immediately
     
-    // ===== FIXED: Track all intervals and timeouts for proper cleanup =====
+    // ===== FIXED: Track intervals for proper cleanup =====
     var active_intervals = [];
-    var active_standard_timeouts = [];  // For regular setTimeout calls
-    
-    // ===== FIXED: Custom timeout/interval functions that track themselves =====
-    var safe_setTimeout = function(callback, delay) {
-      var timeoutId = jsPsych.pluginAPI.setTimeout(callback, delay);
-      // jsPsych manages these automatically, no need to track
-      return timeoutId;
-    };
-    
-    var safe_setInterval = function(callback, delay) {
-      var intervalId = setInterval(callback, delay);
-      active_intervals.push(intervalId);
-      return intervalId;
-    };
-    
-    // Standard setTimeout for non-jsPsych timeouts
-    var standard_setTimeout = function(callback, delay) {
-      var timeoutId = setTimeout(callback, delay);
-      active_standard_timeouts.push(timeoutId);
-      return timeoutId;
-    };
-    
-    var cleanup_all = function() {
-      // Clear all custom intervals
-      active_intervals.forEach(function(id) {
-        clearInterval(id);
-      });
-      active_intervals = [];
-      
-      // Clear all standard timeouts
-      active_standard_timeouts.forEach(function(id) {
-        clearTimeout(id);
-      });
-      active_standard_timeouts = [];
-      
-      // Clear jsPsych-managed timeouts
-      jsPsych.pluginAPI.clearAllTimeouts();
-    };
+    var movement_check_interval = null;
     
     // setup audio with error handling
     var source = null;
@@ -168,13 +130,13 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         audio = null;
       }
     }
-    
+
     var stop_time = null;
-    var tmp_RT = null;
+    var interval = null;  // interval time for checking for stop
+    var tmp_RT = null;  // variable for storing old RT to check if changed
     
     // Movement stop detection variables
     var last_mouse_time = null;
-    var movement_check_interval = null;
     var movement_threshold = 100;
     var movement_stopped = false;
     var actual_stop_time = null;
@@ -195,15 +157,15 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
     var my_stop_time = 1000; 
     // Go stimuli (show photodiode)
     for (i = trial.time; i > 0; i--) {
-    if (stop_time == null || i > stop_time) {
-      stimuli.push('<img src="' + go_stim[i - 1] + '"id="jspsych-image-keyboard-response-stimulus"></img>');
-    } else {
-      if (stop_time !== null) {
-         my_stop_time = parseInt((i + 1 - stop_time) * 1000);
-        break;
-       }
-     }
-   }
+      if (stop_time == null || i > stop_time) {
+        stimuli.push('<img src="' + go_stim[i - 1] + '"id="jspsych-image-keyboard-response-stimulus"></img>');
+      } else {
+        if (stop_time !== null) {
+          my_stop_time = parseInt((i + 1 - stop_time) * 1000);
+          break;
+        }
+      }
+    }
 
     // Stop stimulus (show photodiode)
     var stop = '<img src="' + stop_stim + '"id="jspsych-image-keyboard-response-stimulus"></img>';
@@ -253,7 +215,8 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       if (movement_check_interval) {
         clearInterval(movement_check_interval);
       }
-      movement_check_interval = safe_setInterval(detect_movement_stop, 20);
+      movement_check_interval = setInterval(detect_movement_stop, 20);
+      active_intervals.push(movement_check_interval);
     };
 
     // ===== FIXED: Prevent multiple end_trial calls =====
@@ -282,13 +245,26 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       }
 
       // ===== FIXED: Comprehensive cleanup =====
-      cleanup_all();
+      // Clear all tracked intervals
+      active_intervals.forEach(function(intervalId) {
+        clearInterval(intervalId);
+      });
+      active_intervals = [];
       
       // Stop movement detection
       if (movement_check_interval) {
         clearInterval(movement_check_interval);
         movement_check_interval = null;
       }
+      
+      // Clear any remaining interval
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
+
+      // kill any remaining setTimeout handlers
+      jsPsych.pluginAPI.clearAllTimeouts();
 
       // remove mouse listener
       document.removeEventListener('mousemove', mouse_move_event);
@@ -299,14 +275,16 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       console.log('stop_signal_timestamp:', stop_signal_timestamp);
       console.log('Time difference:', stop_signal_timestamp ? (stop_signal_timestamp - start_signal_timestamp) : 'N/A', 'ms');
 
-      // gather the data to store for the trial
+      // ===== FIXED: Ensure all timestamp variables are included =====
       var trial_data = {
         "trial_type_data": trial.trial_type,
         "count": trial.time,
-        "start_signal": start_signal_timestamp,
-        "stop_signal": stop_signal_timestamp,
-        "start_time": trial_start_time,
-        "stop_time": stop_signal_timestamp, // fixing the array by adding this variable back into the plugin and not just the html file
+        "stop_time": stop_time,
+        "start_time": start_signal_timestamp,        // FIXED: Use actual timestamp
+        "start_signal": start_signal_timestamp,      // FIXED: Add consistent naming
+        "stop_signal": stop_signal_timestamp,        // FIXED: Add consistent naming
+        "stop_signal_time": stop_signal_timestamp,   // FIXED: For backward compatibility
+        "trial_start_time": trial_start_time,        // FIXED: Add trial start reference
         "number_times": number_times,
         "goRT": response.goRT,
         "RT": response.RT,
@@ -333,6 +311,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       r = Math.sqrt((x - x0) ** 2 + (y - y0) **2);
       theta = Math.atan((y - y0) / (x - x0));
       thetap = Math.atan((yp - y0) / (xp - x0));
+      // check phase wrap around needed
       if (Math.sign(theta) != Math.sign(thetap)) {
         if (theta < 0) {
           theta += Math.PI
@@ -346,7 +325,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       }
       if (theta < thetap) {
         response.wrong_way++;
-      } else if (Math.abs(r - 0.8 * y0) / y0 > 0.5) {
+      } else if (Math.abs(r - 0.8 * y0) / y0 > 0.5) { //circle is about 80 % of height
         response.incorrect_movement++;
       } else if (speed < 1) {
         response.too_slow++;
@@ -360,7 +339,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       var now_time = performance.now();
       var x = e.clientX;
       var y = e.clientY;
-      var xp = null;
+      var xp = null;  // previous location
       var yp = null;
 
       last_mouse_time = now_time;
@@ -369,7 +348,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         return;
       } else if (go) {
         if (response.go_pos_x.length == 0){
-          response.goRT = Math.round(now_time - trial_start_time);
+          response.goRT = Math.round(now_time - start_signal_timestamp); // FIXED: Use correct timestamp
           trigger_write(12);
           console.log('Go RT was ' + response.goRT + ' ms');
         } else {
@@ -378,15 +357,16 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         }
         response.go_pos_x.push(x);
         response.go_pos_y.push(y);
-        response.go_times.push(Math.round(now_time - trial_start_time));
+        response.go_times.push(Math.round(now_time - start_signal_timestamp)); // FIXED: Use correct timestamp
       } else {
-        response.RT = Math.round(now_time - stop_time2);
+        response.RT = Math.round(now_time - stop_time2); // update time every mouse move
         if (response.stop_pos_x.length > 0) {
           xp = response.stop_pos_x[response.stop_pos_x.length - 1];
           yp = response.stop_pos_y[response.stop_pos_y.length - 1];
         }
         response.stop_pos_x.push(x);
         response.stop_pos_y.push(y);
+        response.stop_times.push(Math.round(now_time - stop_time2));
       }
       if (xp !== null) {
         judge_movement(x, y, xp, yp);
@@ -394,16 +374,15 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
     }
 
     // ===== FIXED: Eliminate infinite recursion in check_no_move =====
-    var check_interval_id = null;
-    var last_check_time = 0;
-    var max_checks = 500; // Safety limit
     var check_count = 0;
+    var max_checks = 500; // Safety limit
+    var last_check_time = 0;
     
     var check_no_move = function() {
       if (trial_ended) {
-        if (check_interval_id) {
-          clearInterval(check_interval_id);
-          check_interval_id = null;
+        if (interval) {
+          clearInterval(interval);
+          interval = null;
         }
         return;
       }
@@ -411,22 +390,24 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       check_count++;
       if (check_count > max_checks) {
         console.warn('Max check limit reached, ending trial');
-        if (check_interval_id) {
-          clearInterval(check_interval_id);
-          check_interval_id = null;
+        if (interval) {
+          clearInterval(interval);
+          interval = null;
         }
         end_trial();
         return;
       }
       
       var current_time = performance.now();
+      
+      // check if no movement every 30 ms, if so write trigger
       if (response.RT == tmp_RT && (current_time - last_check_time) > 100) {
         last_check_time = current_time;
         
         trigger_write(15);
-        if (check_interval_id) {
-          clearInterval(check_interval_id);
-          check_interval_id = null;
+        if (interval) {
+          clearInterval(interval);
+          interval = null;
         }
         console.log('Stop RT was ' + response.RT + ' ms');
         
@@ -434,8 +415,8 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
           response.stop_times.push(performance.now() - trial_start_time);
         }
         
-        // Determine exclusion reason
-        if (response.RT > 500) {
+        // judge if trial should be excluded
+        if (response.RT > 500) {  // will be overwritten by all others, don't have to use
           response.exclude = 'remember: try to stop';
         } else if (response.wrong_way / response.go_pos_x.length > 0.25) {
           response.exclude = 'wrong way';
@@ -450,12 +431,12 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
           response.exclude = 'no';
         }
         
-        // ===== FIXED: Prevent competing timeouts =====
+        // give feedback
         if (trial.feedback) {
           display_element.innerHTML = '<p style="font-size: 44px;">' +
-            (response.exclude == 'no' ? correct_msg : response.exclude) + '</p>';
+            (response.exclude == 'no' ? correct_msg : response.exclude) + '</p>'; // FIXED: removed syntax error
           
-          safe_setTimeout(function() {
+          jsPsych.pluginAPI.setTimeout(function() {
             if (!trial_ended) {
               display_element.innerHTML = '';
               end_trial();
@@ -469,22 +450,23 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       }
     }
 
+    // add listener for moving mouse
     document.addEventListener('mousemove', mouse_move_event);
 
     var counter = 0;
     
-    // Always set up the start signal, regardless of fixation_duration
+    // ===== FIXED: Always set up the start signal, regardless of fixation_duration =====
     var fixation_time = trial.fixation_duration || 0;
     counter += fixation_time;
     
-    safe_setTimeout(function() {
+    jsPsych.pluginAPI.setTimeout(function() {
       if (trial_ended) return;
       
       display_element.innerHTML = stimuli[0];
       showPhotodiodeBox();
       trigger_write(11);
       
-      start_signal_timestamp = performance.now();
+      start_signal_timestamp = performance.now(); // FIXED: Always set this timestamp
       
       console.log('PLUGIN: Start signal appearing at:', start_signal_timestamp);
       
@@ -498,7 +480,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         counter += 1000;
         let my_stimuli = stimuli[i];
         let stim_idx = trial.time - i + 1;
-        safe_setTimeout(function() {
+        jsPsych.pluginAPI.setTimeout(function() {
           if (trial_ended) return;
           display_element.innerHTML = my_stimuli;
           trigger_write(stim_idx);
@@ -515,13 +497,13 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
     console.log('PLUGIN: Total counter value:', counter);
     console.log('PLUGIN: Current time when scheduling:', performance.now());
     
-    safe_setTimeout(function() {
+    jsPsych.pluginAPI.setTimeout(function() {
         if (trial_ended) return;
         
         display_element.innerHTML = stop;
         trigger_write(stop_time == null ? 13 : 14);
         
-        stop_signal_timestamp = performance.now();
+        stop_signal_timestamp = performance.now(); // FIXED: Always capture this timestamp
         
         console.log('PLUGIN: Stop signal ACTUALLY appeared at:', stop_signal_timestamp);
         console.log('PLUGIN: Expected vs actual timing check - scheduled for counter:', counter);
@@ -533,6 +515,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         }
         console.log('PLUGIN: Time difference from start:', (stop_signal_timestamp - start_signal_timestamp), 'ms');
         
+        // start audio
         if(trial.tone !== null) {
           try {
             if(context !== null && source){
@@ -546,20 +529,25 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         }
         go = false;
         stop_time2 = performance.now();
+        // check if stopped
         tmp_RT = response.RT;
         
-        // ===== FIXED: Start movement check with safety measures =====
+        // ===== FIXED: Reset safety counters and start checking =====
         check_count = 0;
         last_check_time = 0;
-        if (check_interval_id) {
-          clearInterval(check_interval_id);
+        if (interval) {
+          clearInterval(interval);
         }
-        check_interval_id = safe_setInterval(check_no_move, 30);
+        interval = setInterval(function() {
+          check_no_move();
+        }, 30);
+        active_intervals.push(interval);
       }, counter);
 
+    // trial duration cap
     if (trial.trial_duration !== null) {
       counter += trial.trial_duration
-      safe_setTimeout(function() {
+      jsPsych.pluginAPI.setTimeout(function() {
         if (!trial_ended) {
           display_element.innerHTML = '';
           end_trial();
