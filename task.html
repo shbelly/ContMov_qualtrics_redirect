@@ -274,8 +274,8 @@
                 type: trial_type,
                 start_signal: start_signal,
                 stop_signal: stop_signal,
-                stop_time: stop_time,  // ADDED: log the calculated stop time
-                actual_stop_time: actual_stop_time,  // ADDED: log when participant actually stopped
+                stop_time: stop_time || null,  // Handle undefined case
+                actual_stop_time: actual_stop_time || null,  // Handle undefined case
                 goRT: goRT,
                 RT: RT,
                 exclude: exclude
