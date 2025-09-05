@@ -306,6 +306,7 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         "start_signal": start_signal_timestamp,
         "stop_signal": stop_signal_timestamp,
         "start_time": trial_start_time,
+        "stop_time": stop_signal_timestamp, // fixing the array by adding this variable back into the plugin and not just the html file
         "number_times": number_times,
         "goRT": response.goRT,
         "RT": response.RT,
