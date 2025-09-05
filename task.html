@@ -127,6 +127,7 @@
         var start_time = null;
         var start_signal = null;
         var stop_signal = null;
+        var stop_time = null;  // ADDED: for the calculated stop time
         var goRT = null;
         var RT = null;
         var go_pos_x = null;
@@ -273,6 +274,7 @@
                 type: trial_type,
                 start_signal: start_signal,
                 stop_signal: stop_signal,
+                stop_time: stop_time,  // ADDED: log the calculated stop time
                 goRT: goRT,
                 RT: RT,
                 exclude: exclude
@@ -345,12 +347,16 @@
                 count = data.count;
                 start_signal = data.start_signal;
                 stop_signal = data.stop_signal;
+                stop_time = data.stop_time;  // ADDED: extract the calculated stop time
                 
-                // DEBUG: Log the raw data from plugin
+                // UPDATED: Enhanced debug logging for new timestamp fields
                 console.log('=== DEBUG: Raw plugin data ===');
                 console.log('Trial type:', trial_type);
                 console.log('start_signal type:', typeof data.start_signal, 'value:', data.start_signal);
                 console.log('stop_signal type:', typeof data.stop_signal, 'value:', data.stop_signal);
+                console.log('stop_time type:', typeof data.stop_time, 'value:', data.stop_time);
+                console.log('start_time type:', typeof data.start_time, 'value:', data.start_time);
+                console.log('trial_start_time type:', typeof data.trial_start_time, 'value:', data.trial_start_time);
                 
                 goRT = data.goRT;
                 RT = data.RT;
@@ -462,61 +468,25 @@
                 // Get browser and system info
                 const browserInfo = getBrowserInfo();
 
-                // Create individual trial data objects with IMPROVED timestamp handling
+                // UPDATED: Simplified timestamp processing for new plugin structure
                 const individualTrialData = trialData.map((trial, index) => {
                     
                     // DEBUG: Log what we're processing for each trial
                     console.log('=== DEBUG: Data being processed for trial', index + 1, '===');
                     console.log('start_signal from jsPsych:', trial.start_signal, 'type:', typeof trial.start_signal);
                     console.log('stop_signal from jsPsych:', trial.stop_signal, 'type:', typeof trial.stop_signal);
+                    console.log('stop_time from jsPsych:', trial.stop_time, 'type:', typeof trial.stop_time);
+                    console.log('start_time from jsPsych:', trial.start_time, 'type:', typeof trial.start_time);
                     console.log('trial_type:', trial.trial_type_data);
                     
-                    // IMPROVED: More careful timestamp processing
-                    let processedStartSignal = null;
-                    let processedStopSignal = null;
+                    // SIMPLIFIED: Since plugin now provides clean timestamps, minimal processing needed
+                    const cleanStartSignal = (typeof trial.start_signal === 'number' && !isNaN(trial.start_signal)) ? trial.start_signal : null;
+                    const cleanStopSignal = (typeof trial.stop_signal === 'number' && !isNaN(trial.stop_signal)) ? trial.stop_signal : null;
+                    const cleanStopTime = (typeof trial.stop_time === 'number' && !isNaN(trial.stop_time)) ? trial.stop_time : null;
+                    const cleanStartTime = (typeof trial.start_time === 'number' && !isNaN(trial.start_time)) ? trial.start_time : null;
                     
-                    // Handle start_signal
-                    if (trial.start_signal !== undefined && trial.start_signal !== null) {
-                        if (Array.isArray(trial.start_signal)) {
-                            // If it's an array, take the first valid number
-                            const validStart = trial.start_signal.find(val => typeof val === 'number' && !isNaN(val));
-                            processedStartSignal = validStart || null;
-                            console.log('Processed start_signal from array:', processedStartSignal);
-                        } else if (typeof trial.start_signal === 'number' && !isNaN(trial.start_signal)) {
-                            processedStartSignal = trial.start_signal;
-                        } else {
-                            console.warn('Invalid start_signal type:', typeof trial.start_signal, trial.start_signal);
-                        }
-                    }
-                    
-                    // Handle stop_signal - only process for stop trials
-                    if (trial.trial_type_data === 'stop' && trial.stop_signal !== undefined && trial.stop_signal !== null) {
-                        if (Array.isArray(trial.stop_signal)) {
-                            // If it's an array, take the first valid number
-                            const validStop = trial.stop_signal.find(val => typeof val === 'number' && !isNaN(val));
-                            processedStopSignal = validStop || null;
-                            console.log('Processed stop_signal from array:', processedStopSignal);
-                        } else if (typeof trial.stop_signal === 'number' && !isNaN(trial.stop_signal)) {
-                            processedStopSignal = trial.stop_signal;
-                        } else {
-                            console.warn('Invalid stop_signal type:', typeof trial.stop_signal, trial.stop_signal);
-                        }
-                    } else if (trial.trial_type_data === 'go') {
-                        // Go trials should have null stop_signal
-                        processedStopSignal = null;
-                        console.log('Go trial - stop_signal set to null');
-                    }
-                    
-                    // Validate that we have reasonable timestamp values
-                    if (processedStartSignal !== null && processedStartSignal < 0) {
-                        console.warn('Invalid start_signal value (negative):', processedStartSignal);
-                        processedStartSignal = null;
-                    }
-                    
-                    if (processedStopSignal !== null && processedStopSignal < 0) {
-                        console.warn('Invalid stop_signal value (negative):', processedStopSignal);
-                        processedStopSignal = null;
-                    }
+                    // UPDATED: Log final cleaned values
+                    console.log('Cleaned values - start_signal:', cleanStartSignal, 'stop_signal:', cleanStopSignal, 'stop_time:', cleanStopTime, 'start_time:', cleanStartTime);
                     
                     return {
                         // Participant info
@@ -532,10 +502,12 @@
                         trial_type: trial.trial_type_data,
                         count: trial.count || null,
                         
-                        // IMPROVED: Use carefully processed timestamp fields
-                        start_signal: processedStartSignal,
-                        stop_signal: processedStopSignal,
-                        start_time: trial.start_time || null,
+                        // UPDATED: All timestamp fields from new plugin structure
+                        start_signal: cleanStartSignal,      // When start signal appeared
+                        stop_signal: cleanStopSignal,        // When stop signal appeared (or countdown ended)
+                        stop_time: cleanStopTime,            // Calculated stop time from plugin
+                        start_time: cleanStartTime,          // Start time reference
+                        trial_start_time: (typeof trial.trial_start_time === 'number' && !isNaN(trial.trial_start_time)) ? trial.trial_start_time : null,
                         
                         // Response data
                         goRT: trial.goRT || null,
@@ -566,7 +538,7 @@
                     };
                 });
 
-                // ADDITIONAL: Validate for duplicates across the entire dataset
+                // UPDATED: Validation for duplicate timestamps
                 console.log("=== CHECKING FOR DUPLICATE TIMESTAMPS ===");
                 const startSignals = individualTrialData.map(t => t.start_signal).filter(s => s !== null);
                 const stopSignals = individualTrialData.map(t => t.stop_signal).filter(s => s !== null);
@@ -581,7 +553,7 @@
                     console.warn('DUPLICATE STOP SIGNALS FOUND:', duplicateStops);
                 }
 
-                console.log("Sending processed trial data with improved timestamps:", individualTrialData);
+                console.log("Sending processed trial data with updated timestamp structure:", individualTrialData);
 
                 // If running in embedded mode (iframe), send completion message to parent (Qualtrics)
                 if (embeddedMode && window.parent !== window) {
@@ -752,6 +724,7 @@
                     count = data.count;
                     start_signal = data.start_signal;
                     stop_signal = data.stop_signal;
+                    stop_time = data.stop_time;  // ADDED: extract calculated stop time
                     
                     goRT = data.goRT;
                     RT = data.RT;
@@ -831,6 +804,7 @@
                         count = data.count;
                         start_signal = data.start_signal;
                         stop_signal = data.stop_signal;
+                        stop_time = data.stop_time;  // ADDED: extract calculated stop time
                         
                         goRT = data.goRT;
                         RT = data.RT;
