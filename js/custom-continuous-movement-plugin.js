@@ -3,6 +3,7 @@
  * by Alex Rockhill
  * modified by Sara Parmigiani (2025)
  * FIXED by Claude (2025) - ensured timestamp capture for Qualtrics version
+ * UPDATED - added actual stop time calculation
  * based on:
  * jspsych-image-keyboard-response
  * by Josh de Leeuw
@@ -219,6 +220,44 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       active_intervals.push(movement_check_interval);
     };
 
+    // ===== UPDATED: Calculate actual stop time from movement data =====
+    var calculate_actual_stop_time = function() {
+      var calculated_stop_time = null;
+      
+      // Method 1: Use detected movement stop time if available
+      if (actual_stop_time !== null) {
+        calculated_stop_time = actual_stop_time * 1000; // Convert back to milliseconds relative to trial start
+        console.log('Using movement detection stop time:', calculated_stop_time);
+        return calculated_stop_time;
+      }
+      
+      // Method 2: Use last recorded movement time from stop_times array
+      if (response.stop_times && response.stop_times.length > 0) {
+        calculated_stop_time = response.stop_times[response.stop_times.length - 1];
+        console.log('Using last stop_times entry:', calculated_stop_time);
+        return calculated_stop_time;
+      }
+      
+      // Method 3: Use last recorded movement from stop positions
+      if (response.stop_pos_x && response.stop_pos_x.length > 0) {
+        // Estimate based on when stop signal appeared + some reaction time
+        var estimated_rt = response.RT || 300; // Use measured RT or default 300ms
+        calculated_stop_time = (stop_signal_timestamp - trial_start_time) + estimated_rt;
+        console.log('Using estimated stop time based on RT:', calculated_stop_time);
+        return calculated_stop_time;
+      }
+      
+      // Method 4: Fallback for go trials - use stop signal timestamp
+      if (trial.trial_type === 'go' && stop_signal_timestamp) {
+        calculated_stop_time = stop_signal_timestamp - trial_start_time;
+        console.log('Using stop signal timestamp for go trial:', calculated_stop_time);
+        return calculated_stop_time;
+      }
+      
+      console.log('No reliable stop time could be calculated');
+      return null;
+    };
+
     // ===== FIXED: Prevent multiple end_trial calls =====
     var end_trial = function() {
       // Check if trial already ended
@@ -275,16 +314,24 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
       console.log('stop_signal_timestamp:', stop_signal_timestamp);
       console.log('Time difference:', stop_signal_timestamp ? (stop_signal_timestamp - start_signal_timestamp) : 'N/A', 'ms');
 
-      // ===== FIXED: Ensure all timestamp variables are included =====
+      // ===== UPDATED: Calculate actual stop time and include in trial data =====
+      var calculated_actual_stop_time = calculate_actual_stop_time();
+      
+      console.log('=== STOP TIME CALCULATION ===');
+      console.log('Movement detected stop time:', actual_stop_time);
+      console.log('Stop times array length:', response.stop_times.length);
+      console.log('Calculated actual stop time:', calculated_actual_stop_time);
+
       var trial_data = {
         "trial_type_data": trial.trial_type,
         "count": trial.time,
         "stop_time": stop_time,
-        "start_time": start_signal_timestamp,        // FIXED: Use actual timestamp
-        "start_signal": start_signal_timestamp,      // FIXED: Add consistent naming
-        "stop_signal": stop_signal_timestamp,        // FIXED: Add consistent naming
-        "stop_signal_time": stop_signal_timestamp,   // FIXED: For backward compatibility
-        "trial_start_time": trial_start_time,        // FIXED: Add trial start reference
+        "actual_stop_time": calculated_actual_stop_time,  // NEW: When participant actually stopped
+        "start_time": start_signal_timestamp,
+        "start_signal": start_signal_timestamp,
+        "stop_signal": stop_signal_timestamp,
+        "stop_signal_time": stop_signal_timestamp,
+        "trial_start_time": trial_start_time,
         "number_times": number_times,
         "goRT": response.goRT,
         "RT": response.RT,
@@ -411,8 +458,10 @@ jsPsych.plugins["custom-continuous-movement-plugin"] = (function() {
         }
         console.log('Stop RT was ' + response.RT + ' ms');
         
+        // ===== UPDATED: Record final movement stop time =====
         if (!movement_stopped && response.stop_times.length === 0) {
           response.stop_times.push(performance.now() - trial_start_time);
+          console.log('Recording final stop time in check_no_move');
         }
         
         // judge if trial should be excluded
