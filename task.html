@@ -128,6 +128,7 @@
         var start_signal = null;
         var stop_signal = null;
         var stop_time = null;  // ADDED: for the calculated stop time
+        var actual_stop_time = null;  // NEW: for the actual movement stop time
         var goRT = null;
         var RT = null;
         var go_pos_x = null;
@@ -349,6 +350,7 @@
                 start_signal = data.start_signal;
                 stop_signal = data.stop_signal;
                 stop_time = data.stop_time;  // ADDED: extract the calculated stop time
+                actual_stop_time = data.actual_stop_time;  // NEW: Extract actual stop time
                 
                 // UPDATED: Enhanced debug logging for new timestamp fields
                 console.log('=== DEBUG: Raw plugin data ===');
@@ -356,6 +358,7 @@
                 console.log('start_signal type:', typeof data.start_signal, 'value:', data.start_signal);
                 console.log('stop_signal type:', typeof data.stop_signal, 'value:', data.stop_signal);
                 console.log('stop_time type:', typeof data.stop_time, 'value:', data.stop_time);
+                console.log('actual_stop_time type:', typeof data.actual_stop_time, 'value:', data.actual_stop_time);
                 console.log('start_time type:', typeof data.start_time, 'value:', data.start_time);
                 console.log('trial_start_time type:', typeof data.trial_start_time, 'value:', data.trial_start_time);
                 
@@ -477,6 +480,7 @@
                     console.log('start_signal from jsPsych:', trial.start_signal, 'type:', typeof trial.start_signal);
                     console.log('stop_signal from jsPsych:', trial.stop_signal, 'type:', typeof trial.stop_signal);
                     console.log('stop_time from jsPsych:', trial.stop_time, 'type:', typeof trial.stop_time);
+                    console.log('actual_stop_time from jsPsych:', trial.actual_stop_time, 'type:', typeof trial.actual_stop_time);
                     console.log('start_time from jsPsych:', trial.start_time, 'type:', typeof trial.start_time);
                     console.log('trial_type:', trial.trial_type_data);
                     
@@ -484,10 +488,11 @@
                     const cleanStartSignal = (typeof trial.start_signal === 'number' && !isNaN(trial.start_signal)) ? trial.start_signal : null;
                     const cleanStopSignal = (typeof trial.stop_signal === 'number' && !isNaN(trial.stop_signal)) ? trial.stop_signal : null;
                     const cleanStopTime = (typeof trial.stop_time === 'number' && !isNaN(trial.stop_time)) ? trial.stop_time : null;
+                    const cleanActualStopTime = (typeof trial.actual_stop_time === 'number' && !isNaN(trial.actual_stop_time)) ? trial.actual_stop_time : null;
                     const cleanStartTime = (typeof trial.start_time === 'number' && !isNaN(trial.start_time)) ? trial.start_time : null;
                     
                     // UPDATED: Log final cleaned values
-                    console.log('Cleaned values - start_signal:', cleanStartSignal, 'stop_signal:', cleanStopSignal, 'stop_time:', cleanStopTime, 'start_time:', cleanStartTime);
+                    console.log('Cleaned values - start_signal:', cleanStartSignal, 'stop_signal:', cleanStopSignal, 'stop_time:', cleanStopTime, 'actual_stop_time:', cleanActualStopTime, 'start_time:', cleanStartTime);
                     
                     return {
                         // Participant info
@@ -507,6 +512,7 @@
                         start_signal: cleanStartSignal,      // When start signal appeared
                         stop_signal: cleanStopSignal,        // When stop signal appeared (or countdown ended)
                         stop_time: cleanStopTime,            // Calculated stop time from plugin
+                        actual_stop_time: cleanActualStopTime, // NEW: When participant actually stopped moving
                         start_time: cleanStartTime,          // Start time reference
                         trial_start_time: (typeof trial.trial_start_time === 'number' && !isNaN(trial.trial_start_time)) ? trial.trial_start_time : null,
                         
@@ -543,15 +549,20 @@
                 console.log("=== CHECKING FOR DUPLICATE TIMESTAMPS ===");
                 const startSignals = individualTrialData.map(t => t.start_signal).filter(s => s !== null);
                 const stopSignals = individualTrialData.map(t => t.stop_signal).filter(s => s !== null);
+                const actualStopTimes = individualTrialData.map(t => t.actual_stop_time).filter(s => s !== null);
                 
                 const duplicateStarts = startSignals.filter((item, index) => startSignals.indexOf(item) !== index);
                 const duplicateStops = stopSignals.filter((item, index) => stopSignals.indexOf(item) !== index);
+                const duplicateActualStops = actualStopTimes.filter((item, index) => actualStopTimes.indexOf(item) !== index);
                 
                 if (duplicateStarts.length > 0) {
                     console.warn('DUPLICATE START SIGNALS FOUND:', duplicateStarts);
                 }
                 if (duplicateStops.length > 0) {
                     console.warn('DUPLICATE STOP SIGNALS FOUND:', duplicateStops);
+                }
+                if (duplicateActualStops.length > 0) {
+                    console.warn('DUPLICATE ACTUAL STOP TIMES FOUND:', duplicateActualStops);
                 }
 
                 console.log("Sending processed trial data with updated timestamp structure:", individualTrialData);
@@ -726,6 +737,7 @@
                     start_signal = data.start_signal;
                     stop_signal = data.stop_signal;
                     stop_time = data.stop_time;  // ADDED: extract calculated stop time
+                    actual_stop_time = data.actual_stop_time;  // NEW: Extract actual stop time
                     
                     goRT = data.goRT;
                     RT = data.RT;
@@ -806,6 +818,7 @@
                         start_signal = data.start_signal;
                         stop_signal = data.stop_signal;
                         stop_time = data.stop_time;  // ADDED: extract calculated stop time
+                        actual_stop_time = data.actual_stop_time;  // NEW: Extract actual stop time
                         
                         goRT = data.goRT;
                         RT = data.RT;
