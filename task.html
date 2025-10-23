@@ -54,9 +54,9 @@
         var stop_stim = 'images/stop.png';
         var tone_stim = 'audio/tone.mp3';
 
-        // Experiment design - SHORTENED for 7 minutes
+        // Experiment design - SHORTENED for 12 minutes
         let stop_prop = 0.4;
-        let n_trials_per_block = 30; // Reduced from 30
+        let n_trials_per_block = 30; // 
         let n_practice_trials = 8;   // Reduced from 13
         var n_blocks_exp = 2;        // Reduced from 6
         var n_secs = [5, 4, 3];
@@ -115,7 +115,7 @@
         var welcome_message = ['<p>Welcome to the Continuous Movement Task.</p><p>Press "Next" to begin.</p>'];
         var text_at_start_block = '<p>Press the <strong>spacebar</strong> to begin this block.</p>';
         var get_ready_message = '<p>Get ready...</p>';
-        var end_message = "<p>Thank you for completing the Continuous Movement Task!</p><p>Processing your data...</p>";
+        var end_message = "<p>Thank you for completing the Continuous Movement Task!</p><p>You will now be redirected to continue with the remaining tasks...</p>";
 
         // ===== VARIABLES =====
         var timeline = [];
@@ -630,37 +630,45 @@
                     console.log('Completion key:', 'cm_task_completed_' + responseID);
                     console.log('Data key:', 'cm_task_data_' + responseID);
                     
-                    // Show completion message
-                    document.body.innerHTML = '<div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;"><h2 style="color: #28a745;">Task Complete!</h2><p style="font-size: 18px; margin: 20px 0;">Your data has been saved successfully.</p><div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin: 20px auto; max-width: 600px;"><h3 style="color: #333; margin-top: 0;">Data Summary:</h3><p><strong>Total Trials:</strong> ' + cmData.length + '</p><p><strong>Browser:</strong> ' + getBrowserInfo().browser + '</p></div><div style="background: #d1ecf1; border: 1px solid #bee5eb; border-radius: 8px; padding: 15px; margin: 20px auto; max-width: 600px;"><p style="margin: 0; color: #0c5460;"><strong>Next Steps:</strong><br>1. Return to the survey tab<br>2. The page will automatically refresh<br>3. Click "Next" to continue the survey</p></div><button onclick="window.close()" style="padding: 12px 24px; font-size: 16px; background: #007ACC; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 10px;">Close This Tab</button><button onclick="returnToSurvey()" style="padding: 12px 24px; font-size: 16px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 10px;">Return to Survey</button></div>';
+                    // REDIRECT TO PROLIFIC
+                    // Get Prolific PID from URL parameters
+                    var prolificPID = getUrlParameter('PROLIFIC_PID') || responseID;
                     
-                    // Add function to return to survey (if opened from same domain)
-                    window.returnToSurvey = function() {
-                        try {
-                            if (window.opener && !window.opener.closed) {
-                                window.opener.location.reload();
-                                window.close();
-                            } else {
-                                alert('Please return to the survey tab manually and refresh the page.');
-                            }
-                        } catch (e) {
-                            alert('Please return to the survey tab manually and refresh the page.');
-                        }
-                    };
+                    // Build Prolific redirect URL with completion code
+                    var prolificRedirectURL = 'https://app.prolific.com/submissions/complete?cc=C1CPRVCS';
                     
-                    // Auto-close after 30 seconds if user doesn't act
+                    console.log('=== REDIRECTING TO PROLIFIC ===');
+                    console.log('Participant ID:', prolificPID);
+                    console.log('Redirect URL:', prolificRedirectURL);
+                    
+                    // Show completion message briefly before redirect
+                    document.body.innerHTML = '<div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;"><h2 style="color: #28a745;">Task Complete!</h2><p style="font-size: 18px; margin: 20px 0;">Your data has been saved successfully.</p><div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin: 20px auto; max-width: 600px;"><h3 style="color: #333; margin-top: 0;">Data Summary:</h3><p><strong>Total Trials:</strong> ' + cmData.length + '</p><p><strong>Participant ID:</strong> ' + prolificPID + '</p></div><div style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 8px; padding: 15px; margin: 20px auto; max-width: 600px;"><p style="margin: 0; color: #155724; font-size: 18px;"><strong>Redirecting to continue with remaining tasks...</strong></p><div style="margin-top: 10px;"><div style="width: 100%; background: #e9ecef; border-radius: 4px; overflow: hidden;"><div id="progress-bar" style="width: 0%; height: 8px; background: #28a745; transition: width 3s linear;"></div></div></div></div></div>';
+                    
+                    // Animate progress bar
                     setTimeout(() => {
-                        if (confirm('Auto-closing in 5 seconds. Return to survey tab now.\n\nClick OK to close immediately, or Cancel to keep this tab open.')) {
-                            window.close();
-                        }
-                    }, 25000);
+                        document.getElementById('progress-bar').style.width = '100%';
+                    }, 100);
+                    
+                    // Redirect after 3 seconds
+                    setTimeout(() => {
+                        window.location.href = prolificRedirectURL;
+                    }, 3000);
                     
                 } catch (error) {
                     console.error('Error storing data:', error);
-                    document.body.innerHTML = '<div style="text-align: center; padding: 50px;"><h2 style="color: #dc3545;">Storage Error</h2><p>There was an error saving your data:</p><p style="background: #f8d7da; padding: 10px; border-radius: 5px; color: #721c24;">' + error.message + '</p><p>Please contact the researcher.</p></div>';
+                    // Even if storage fails, still redirect to Prolific
+                    console.log('Storage failed, but still redirecting to Prolific...');
+                    setTimeout(() => {
+                        window.location.href = 'https://app.prolific.com/submissions/complete?cc=C1CPRVCS';
+                    }, 2000);
                 }
             } else {
                 console.log('No data available to store');
-                document.body.innerHTML = '<div style="text-align: center; padding: 50px;"><h2 style="color: #dc3545;">No Data Available</h2><p>No task data was generated. Please contact the researcher.</p></div>';
+                // Still redirect to Prolific even if no data
+                document.body.innerHTML = '<div style="text-align: center; padding: 50px;"><h2 style="color: #ffc107;">Warning: No Data Saved</h2><p>No task data was generated, but redirecting to continue...</p></div>';
+                setTimeout(() => {
+                    window.location.href = 'https://app.prolific.com/submissions/complete?cc=C1CPRVCS';
+                }, 3000);
             }
         }
 
@@ -950,7 +958,8 @@
                 // Final data send (backup in case goodbye trial didn't fire)
                 setTimeout(function() {
                     sendDataToQualtrics();
-                    redirectToQualtrics();
+                    // Always redirect to Prolific on completion
+                    window.location.href = 'https://app.prolific.com/submissions/complete?cc=C1CPRVCS';
                 }, 1000);
             }
         });
