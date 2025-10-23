@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Continuous Movement Task</title>
+    
+    <!-- jsPsych Library -->
+    <script src="js/jsPsych/jspsych.js"></script>
+    <script src="js/jsPsych/plugins/jspsych-instructions.js"></script>
+    <script src="js/jsPsych/plugins/jspsych-html-keyboard-response.js"></script>
+    <script src="js/jsPsych/plugins/jspsych-call-function.js"></script>
+    <script src="js/jsPsych/plugins/jspsych-fullscreen.js"></script>
+    <link href="js/jsPsych/css/jspsych.css" rel="stylesheet" type="text/css">
+    
+    <!-- Other Required Libraries -->
+    <script src="js/jquery-3.6.0.min.js"></script>
+    <script src="js/bowser.js"></script>
+    <script src="js/sprintf.js"></script>
+    <script src="js/rng.js"></script>
+    <script>var myrng = new Math.seedrandom('continuous-movement_seed');</script>
+    <script src="js/custom-continuous-movement-plugin.js"></script>
+</head>
+
+<body>
+    <script>
+        // ===== GET QUALTRICS PARAMETERS =====
+        function getUrlParameter(name) {
+            name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+            var regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+            var results = regex.exec(location.search);
+            return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+        }
+        
+        // Get Qualtrics redirect URL and other parameters
+        var qualtricsURL = getUrlParameter('Q_URL');
+        var responseID = getUrlParameter('ResponseId') || getUrlParameter('PROLIFIC_PID') || 'unknown';
+        var surveyID = getUrlParameter('SID') || 'unknown';
+        var embeddedMode = getUrlParameter('embedded') === 'true';
+        
+        console.log('Qualtrics URL:', qualtricsURL);
+        console.log('Response ID:', responseID);
+        console.log('Survey ID:', surveyID);
+        console.log('Embedded Mode:', embeddedMode);
+        
+        // ===== TASK CONFIGURATION =====
+        var pd = false;  // Disable photodiode for online use
+        
+        // Stimuli paths
+        var fix_stim = 'images/fix.png';
+        var go_stim = ['images/go_stim1.png', 'images/go_stim2.png', 'images/go_stim3.png',
+                       'images/go_stim4.png', 'images/go_stim5.png', 'images/go_stim6.png',
+                       'images/go_stim7.png', 'images/go_stim8.png', 'images/go_stim9.png',
+                       'images/go_stim10.png'];
+        var start_stim = 'images/start.png';
+        var stop_stim = 'images/stop.png';
+        var tone_stim = 'audio/tone.mp3';
+
+        // Experiment design - SHORTENED for 7 minutes
+        let stop_prop = 0.4;
+        let n_trials_per_block = 30; // Reduced from 30
+        let n_practice_trials = 8;   // Reduced from 13
+        var n_blocks_exp = 2;        // Reduced from 6
+        var n_secs = [5, 4, 3];
+        let t_stop_min = 0.5;
+        let t_stop_max = 2.5;
+
+        // Timing intervals (milliseconds)
+        let ITI = 2000;
+        let FIX = 250;
+        let MAXRT = 1250;
+        let iFBT = 750;
+        let bFBT = 15000;
+
+        // Screen settings - adjust for embedded mode
+        var fullscreen = !embeddedMode; // Disable fullscreen in embedded mode
+        var minWidth = embeddedMode ? 300 : 800;   // Much smaller requirements when embedded
+        var minHeight = embeddedMode ? 250 : 600;  // Much smaller requirements when embedded
+
+        // Disable local redirection - we'll redirect to Qualtrics
+        var redirect_onCompletion = false;
+
+        // ===== INSTRUCTIONS =====
+        let page1 = [
+            "<p>In this experiment, a circle will appear in the center " +
+            "of the screen.</p><p>Your task is to move the cursor around the " +
+            "circle at a steady rate until the word <strong>STOP</strong> " +
+            "appears.</p><p>On some trials, the <strong>STOP</strong> will " +
+            "occur at the end of a countdown, on others it will interrupt the " +
+            "countdown before it is completed.</p>"
+        ];
+
+        let page2 = [
+            '<p>It is important that you not move the mouse before the <strong>START</strong> cue is shown.</p>' +
+            '<p>Remember that the task is to stop when the <strong>STOP</strong> cue is shown.</p>' +
+            '<p>We will start with a short practice block in which you will receive immediate feedback. ' +
+            'You will no longer receive immediate feedback in the experimental phase.</p>'+
+            '<p>However, at the end of each experimental block, ' +
+            'there will be a 15 second break. During this break, we will show you some information about ' +
+            'your mean performance in the previous block.</p>' +
+            '<p>The experiment consists of 1 practice block and ' + n_blocks_exp +
+            ' experimental blocks. <strong>Total time: approximately 7 minutes.</strong></p>'
+        ];
+
+        // Feedback messages
+        let correct_msg = 'Good job!';
+        let no_signal_header = "<p><b>GO TRIALS: </b></p>";
+        let avg_rt_msg = "<p>Average response time = %.2f seconds</p>";
+        let prop_inc_msg = "<p>Proportion too far from the circle = %.2f (should be 0)</p>";
+        let prop_ww_msg = "<p>Proportion wrong way = %.2f (should be 0)</p>";
+        let prop_slow_msg = "<p>Proportion too slow = %.2f (should be 0)</p>";
+        let prop_early_msg = "<p>Proportion early stops = %.2f (should be 0)</p>";
+        let stop_signal_header = "<p><b>STOP-SIGNAL TRIALS: </b></p>";
+        let next_block_msg = "<p>You can take a short break, the next block starts in <span id='timer'>15</span></p>";
+        let final_block_msg = "<p>Press space to continue...</p>";
+
+        var welcome_message = ['<p>Welcome to the Continuous Movement Task.</p><p>Press "Next" to begin.</p>'];
+        var text_at_start_block = '<p>Press the <strong>spacebar</strong> to begin this block.</p>';
+        var get_ready_message = '<p>Get ready...</p>';
+        var end_message = "<p>Thank you for completing the Continuous Movement Task!</p><p>You will now be redirected to continue with the remaining tasks...</p>";
+
+        // ===== VARIABLES =====
+        var timeline = [];
+        var trial_ind = 1;
+        var block_ind = 0;
+        var fix_time = null;
+        var trial_type = null;
+        var count = null;
+        var start_time = null;
+        var start_signal = null;
+        var stop_signal = null;
+        var stop_time = null;  // ADDED: for the calculated stop time
+        var actual_stop_time = null;  // NEW: for the actual movement stop time
+        var goRT = null;
+        var RT = null;
+        var go_pos_x = null;
+        var go_pos_y = null;
+        var go_times = null;
+        var stop_pos_x = null;
+        var stop_pos_y = null;
+        var stop_times = null;
+        var exclude = null;
+
+        // Block feedback variables
+        var n_stop = 0;
+        var n_go = 0;
+        var inc = 0;
+        var ww = 0;
+        var slow = 0;
+        var av_goRT = 0;
+        var av_ssRT = 0;
+        var early_ns = 0;
+
+        var focus = 'focus';
+        var fullscr_ON = 'no';
+
+        // Generate subject ID using response ID
+        var code = responseID + '_CM_' + Date.now();
+        jsPsych.data.addProperties({participantID: code});
+
+        // Preload stimuli
+        var pre_load_stimuli = go_stim.concat([fix_stim, start_stim, stop_stim]);
+
+        // ===== CREATE TRIAL DESIGN FUNCTION =====
+        function createTrialDesign(numTrials) {
+            var trial_types = Array.prototype.concat(
+                Array(Math.ceil(numTrials / n_secs.length * (1 - stop_prop))).fill('go'),
+                Array(Math.ceil(numTrials / n_secs.length * stop_prop)).fill('stop')
+            );
+
+            var design = jsPsych.randomization.factorial(
+                {time : n_secs, trial_type: trial_types}, 1
+            );
+
+            if (design.length > numTrials) {
+                console.log('Cropping ' + (design.length - numTrials) +
+                            ' trials from the end of the counterbalanced design');
+                design = design.slice(0, numTrials);
+            }
+            
+            return jsPsych.randomization.shuffle(design);
+        }
+
+        // ===== SIMPLIFIED FUNCTIONS =====
+        function createPhotodiodeBox() {
+            console.log('Photodiode disabled for online use');
+        }
+
+        function hidePhotodiodeBox() {
+            // No-op for online use
+        }
+
+        function showPhotodiodeBox() {
+            // No-op for online use
+        }
+
+        function trigger_write(cmd) {
+            console.log('[TRIGGER]', cmd);
+        }
+
+        // ===== HELPER FUNCTIONS FOR DATA PROCESSING =====
+        function calculateMedian(values) {
+            if (values.length === 0) return 0;
+            const sorted = values.slice().sort((a, b) => a - b);
+            const middle = Math.floor(sorted.length / 2);
+            return sorted.length % 2 === 0 
+                ? (sorted[middle - 1] + sorted[middle]) / 2 
+                : sorted[middle];
+        }
+
+        function getBrowserInfo() {
+            const userAgent = navigator.userAgent;
+            
+            // Simple browser detection
+            let browser = 'unknown';
+            let version = 'unknown';
+            
+            if (userAgent.includes('Chrome')) {
+                browser = 'Chrome';
+                const match = userAgent.match(/Chrome\/(\d+)/);
+                version = match ? match[1] : 'unknown';
+            } else if (userAgent.includes('Firefox')) {
+                browser = 'Firefox';
+                const match = userAgent.match(/Firefox\/(\d+)/);
+                version = match ? match[1] : 'unknown';
+            } else if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) {
+                browser = 'Safari';
+                const match = userAgent.match(/Safari\/(\d+)/);
+                version = match ? match[1] : 'unknown';
+            }
+            
+            // Simple OS detection
+            let os = 'unknown';
+            if (userAgent.includes('Windows')) os = 'Windows';
+            else if (userAgent.includes('Mac')) os = 'macOS';
+            else if (userAgent.includes('Linux')) os = 'Linux';
+            else if (userAgent.includes('Android')) os = 'Android';
+            else if (userAgent.includes('iOS')) os = 'iOS';
+            
+            return {
+                browser: browser,
+                version: version,
+                os: os,
+                mobile: /Mobile|Android|iPhone|iPad/.test(userAgent),
+                tablet: /iPad|Android.*Tablet/.test(userAgent)
+            };
+        }
+
+        // ===== TRIAL DEFINITIONS =====
+        var welcome = {
+            type: "instructions",
+            pages: welcome_message,
+            show_clickable_nav: true,
+            allow_backward: false,
+            button_label_next: "Next"
+        };
+
+        var fullscr = {
+            type: 'fullscreen',
+            fullscreen_mode: true,
+            message: '<p>This task requires fullscreen mode for accurate mouse tracking.</p><p>Click the button below to enter fullscreen.</p>',
+            button_label: "Enter Fullscreen"
+        };
+
+        var instructions = {
+            type: "instructions",
+            pages: [page1, page2],
+            show_clickable_nav: true,
+            button_label_previous: "Previous",
+            button_label_next: "Next"
+        };
+
+        var write_cm_data = function() {    
+            console.log('Trial data:', {
+                block: block_ind,
+                trial: trial_ind,
+                type: trial_type,
+                start_signal: start_signal,
+                stop_signal: stop_signal,
+                stop_time: stop_time || null,  // Handle undefined case
+                actual_stop_time: actual_stop_time || null,  // Handle undefined case
+                goRT: goRT,
+                RT: RT,
+                exclude: exclude
+            });
+        };
+
+        var iti_start_t;
+        var iti = {
+            type: 'html-keyboard-response',
+            stimulus: '',
+            choices: jsPsych.NO_KEYS,
+            trial_duration: ITI,
+            on_start: function() {
+                iti_start_t = performance.now();
+                setTimeout(write_cm_data, 20);
+            },
+            on_finish: function() {
+                console.log('ITI took ' + (performance.now() - iti_start_t) + 'ms');
+            }
+        };
+
+        var block_start = {
+            type: 'html-keyboard-response',
+            stimulus: '<div style="text-align: center; padding: 50px;"><p style="font-size: 24px;">Press <strong>ANY KEY</strong> to begin this block.</p><p style="font-size: 16px; color: #666;">Click anywhere on this screen first, then press any key</p></div>',
+            choices: jsPsych.ALL_KEYS,
+            on_start: function() {
+                console.log('=== BLOCK START SCREEN ===');
+                console.log('Starting block:', block_ind);
+                console.log('Waiting for ANY keyboard input...');
+                
+                // Simple focus management
+                setTimeout(() => {
+                    document.body.focus();
+                    document.body.tabIndex = -1;
+                    console.log('Applied focus to document');
+                }, 100);
+            },
+            on_finish: function(data) {
+                console.log('=== BLOCK START TRIAL ENDED ===');
+                console.log('Response:', data.response);
+                console.log('Moving to next phase...');
+            }
+        };
+
+        var block_get_ready = {
+            type: 'html-keyboard-response',
+            stimulus: get_ready_message,
+            choices: jsPsych.NO_KEYS,
+            trial_duration: 2000,
+        };
+
+        var stimulus = {
+            type: 'custom-continuous-movement-plugin',
+            fixation_duration: FIX,
+            time: jsPsych.timelineVariable('time'),
+            t_stop_min: t_stop_min,
+            trial_type: jsPsych.timelineVariable('trial_type'),
+            trial_duration: MAXRT,
+            tone: tone_stim,
+            feedback: function() { return block_ind == 0 },
+            feedback_duration: iFBT,
+            iti: ITI,
+            on_start: function(data) {  
+                trigger_write(10);
+                fix_time = performance.now();
+                if (!start_time) start_time = performance.now();
+            },
+            on_finish: function(data) {
+                trial_type = data.trial_type_data || data.trial_type;
+                count = data.count;
+                start_signal = data.start_signal;
+                stop_signal = data.stop_signal;
+                stop_time = data.stop_time;  // ADDED: extract the calculated stop time
+                actual_stop_time = data.actual_stop_time;  // NEW: Extract actual stop time
+                
+                // UPDATED: Enhanced debug logging for new timestamp fields
+                console.log('=== DEBUG: Raw plugin data ===');
+                console.log('Trial type:', trial_type);
+                console.log('start_signal type:', typeof data.start_signal, 'value:', data.start_signal);
+                console.log('stop_signal type:', typeof data.stop_signal, 'value:', data.stop_signal);
+                console.log('stop_time type:', typeof data.stop_time, 'value:', data.stop_time);
+                console.log('actual_stop_time type:', typeof data.actual_stop_time, 'value:', data.actual_stop_time);
+                console.log('start_time type:', typeof data.start_time, 'value:', data.start_time);
+                console.log('trial_start_time type:', typeof data.trial_start_time, 'value:', data.trial_start_time);
+                
+                goRT = data.goRT;
+                RT = data.RT;
+                go_pos_x = data.go_pos_x;
+                go_pos_y = data.go_pos_y;
+                go_times = data.go_times;
+                stop_pos_x = data.stop_pos_x;
+                stop_pos_y = data.stop_pos_y;
+                stop_times = data.stop_times;
+                exclude = data.exclude;
+                trial_ind++;
+
+                // Block feedback tracking
+                if (trial_type == 'go') {
+                    n_go++;
+                } else {
+                    n_stop++;
+                }
+                if (exclude == 'too far from the circle') {
+                    inc++;
+                } else if (exclude == 'wrong way') {
+                    ww++;
+                } else if (exclude == 'too slow') {
+                    slow++;
+                } else if (exclude == 'remember: don\'t stop too early') {
+                    early_ns++;
+                }
+                if (goRT != null) {
+                    av_goRT += goRT;
+                }
+                if (RT != null) {
+                    av_ssRT += RT;
+                }
+            }
+        };
+
+        var block_feedback = {
+            type: 'html-keyboard-response',
+            trial_duration: bFBT,
+            choices: function() {
+                if (block_ind >= n_blocks_exp){
+                    return ['p', 'space']
+                } else {
+                    return ['p']
+                }
+            },
+            stimulus: function() {
+                if (block_ind >= n_blocks_exp){
+                    var next_block_text = final_block_msg
+                } else {
+                    var count = (bFBT / 1000);
+                    var counter;
+                    clearInterval(counter);
+                    counter = setInterval(timer, 1000);
+                    function timer(){
+                        count--;
+                        if (count <= 0){
+                            clearInterval(counter);
+                        }
+                        if (document.getElementById("timer")) {
+                            document.getElementById("timer").innerHTML = count;
+                        }
+                    }
+                    var next_block_text = next_block_msg
+                }
+
+                return [
+                    sprintf(prop_inc_msg, inc / (n_go + n_stop)) +
+                    sprintf(prop_ww_msg, ww / (n_go + n_stop)) +
+                    sprintf(prop_slow_msg, slow / (n_go + n_stop)) +
+                    no_signal_header +
+                    sprintf(avg_rt_msg, av_goRT / n_go / 1000) +
+                    sprintf(prop_early_msg, early_ns / (n_go + n_stop)) +
+                    stop_signal_header +
+                    sprintf(avg_rt_msg, av_ssRT / n_stop / 1000) +
+                    next_block_text
+                ]
+            },
+            on_finish: function() {
+                // Reset trial counter and increment block counter
+                trial_ind = 1;
+                block_ind = block_ind + 1;
+                
+                // Reset block feedback variables
+                n_stop = 0;
+                n_go = 0;
+                inc = 0;
+                ww = 0;
+                slow = 0;
+                av_goRT = 0;
+                av_ssRT = 0;
+                early_ns = 0;
+                
+                console.log('Block feedback finished. New block_ind:', block_ind);
+            }
+        };
+
+        function sendDataToQualtrics() {
+            try {
+                console.log("=== CM EXPERIMENT DATA ===");
+                
+                const allData = jsPsych.data.get().values();
+                const trialData = allData.filter(trial => 
+                    trial.trial_type_data && (trial.trial_type_data === 'go' || trial.trial_type_data === 'stop')
+                );
+                
+                console.log(`Found ${trialData.length} trials to send`);
+                
+                // Get browser and system info
+                const browserInfo = getBrowserInfo();
+
+                // UPDATED: Simplified timestamp processing for new plugin structure
+                const individualTrialData = trialData.map((trial, index) => {
+                    
+                    // DEBUG: Log what we're processing for each trial
+                    console.log('=== DEBUG: Data being processed for trial', index + 1, '===');
+                    console.log('start_signal from jsPsych:', trial.start_signal, 'type:', typeof trial.start_signal);
+                    console.log('stop_signal from jsPsych:', trial.stop_signal, 'type:', typeof trial.stop_signal);
+                    console.log('stop_time from jsPsych:', trial.stop_time, 'type:', typeof trial.stop_time);
+                    console.log('actual_stop_time from jsPsych:', trial.actual_stop_time, 'type:', typeof trial.actual_stop_time);
+                    console.log('start_time from jsPsych:', trial.start_time, 'type:', typeof trial.start_time);
+                    console.log('trial_type:', trial.trial_type_data);
+                    
+                    // SIMPLIFIED: Since plugin now provides clean timestamps, minimal processing needed
+                    const cleanStartSignal = (typeof trial.start_signal === 'number' && !isNaN(trial.start_signal)) ? trial.start_signal : null;
+                    const cleanStopSignal = (typeof trial.stop_signal === 'number' && !isNaN(trial.stop_signal)) ? trial.stop_signal : null;
+                    const cleanStopTime = (typeof trial.stop_time === 'number' && !isNaN(trial.stop_time)) ? trial.stop_time : null;
+                    const cleanActualStopTime = (typeof trial.actual_stop_time === 'number' && !isNaN(trial.actual_stop_time)) ? trial.actual_stop_time : null;
+                    const cleanStartTime = (typeof trial.start_time === 'number' && !isNaN(trial.start_time)) ? trial.start_time : null;
+                    
+                    // UPDATED: Log final cleaned values
+                    console.log('Cleaned values - start_signal:', cleanStartSignal, 'stop_signal:', cleanStopSignal, 'stop_time:', cleanStopTime, 'actual_stop_time:', cleanActualStopTime, 'start_time:', cleanStartTime);
+                    
+                    return {
+                        // Participant info
+                        participantID: code,
+                        age: null, // To be filled from survey data
+                        sex: null, // To be filled from survey data
+                        
+                        // Trial identification
+                        block_i: trial.block_i || Math.floor(index / n_trials_per_block) + 1,
+                        trial_i: index + 1,
+                        
+                        // Trial setup
+                        trial_type: trial.trial_type_data,
+                        count: trial.count || null,
+                        
+                        // UPDATED: All timestamp fields from new plugin structure
+                        start_signal: cleanStartSignal,      // When start signal appeared
+                        stop_signal: cleanStopSignal,        // When stop signal appeared (or countdown ended)
+                        stop_time: cleanStopTime,            // Calculated stop time from plugin
+                        actual_stop_time: cleanActualStopTime, // NEW: When participant actually stopped moving
+                        start_time: cleanStartTime,          // Start time reference
+                        trial_start_time: (typeof trial.trial_start_time === 'number' && !isNaN(trial.trial_start_time)) ? trial.trial_start_time : null,
+                        
+                        // Response data
+                        goRT: trial.goRT || null,
+                        RT: trial.RT || null,
+                        
+                        // Movement data (as JSON strings)
+                        go_pos_x: trial.go_pos_x ? JSON.stringify(trial.go_pos_x) : null,
+                        go_pos_y: trial.go_pos_y ? JSON.stringify(trial.go_pos_y) : null,
+                        go_times: trial.go_times ? JSON.stringify(trial.go_times) : null,
+                        stop_pos_x: trial.stop_pos_x ? JSON.stringify(trial.stop_pos_x) : null,
+                        stop_pos_y: trial.stop_pos_y ? JSON.stringify(trial.stop_pos_y) : null,
+                        stop_times: trial.stop_times ? JSON.stringify(trial.stop_times) : null,
+                        
+                        // Trial outcome
+                        exclude: trial.exclude || 'no',
+                        
+                        // System info
+                        focus: focus || 'focus',
+                        Fullscreen: fullscr_ON === 'yes' ? 'yes' : 'no',
+                        browser_name: browserInfo.browser || 'unknown',
+                        browser_version: parseFloat(browserInfo.version) || null,
+                        os_name: browserInfo.os || 'unknown',
+                        os_version: browserInfo.osVersion || null,
+                        tablet: browserInfo.tablet ? 'yes' : 'no',
+                        mobile: browserInfo.mobile ? 'yes' : 'no',
+                        screen_resolution: screen.width + 'x' + screen.height,
+                        window_resolution: window.innerWidth + 'x' + window.innerHeight
+                    };
+                });
+
+                // UPDATED: Validation for duplicate timestamps
+                console.log("=== CHECKING FOR DUPLICATE TIMESTAMPS ===");
+                const startSignals = individualTrialData.map(t => t.start_signal).filter(s => s !== null);
+                const stopSignals = individualTrialData.map(t => t.stop_signal).filter(s => s !== null);
+                const actualStopTimes = individualTrialData.map(t => t.actual_stop_time).filter(s => s !== null);
+                
+                const duplicateStarts = startSignals.filter((item, index) => startSignals.indexOf(item) !== index);
+                const duplicateStops = stopSignals.filter((item, index) => stopSignals.indexOf(item) !== index);
+                const duplicateActualStops = actualStopTimes.filter((item, index) => actualStopTimes.indexOf(item) !== index);
+                
+                if (duplicateStarts.length > 0) {
+                    console.warn('DUPLICATE START SIGNALS FOUND:', duplicateStarts);
+                }
+                if (duplicateStops.length > 0) {
+                    console.warn('DUPLICATE STOP SIGNALS FOUND:', duplicateStops);
+                }
+                if (duplicateActualStops.length > 0) {
+                    console.warn('DUPLICATE ACTUAL STOP TIMES FOUND:', duplicateActualStops);
+                }
+
+                console.log("Sending processed trial data with updated timestamp structure:", individualTrialData);
+
+                // If running in embedded mode (iframe), send completion message to parent (Qualtrics)
+                if (embeddedMode && window.parent !== window) {
+                    window.parent.postMessage({
+                        type: 'CM_TASK_COMPLETE',
+                        data: {
+                            cm_task_completed: true,
+                            cm_trial_data: individualTrialData,
+                            cm_num_trials: individualTrialData.length
+                        }
+                    }, '*');
+                    console.log("Processed trial data sent to parent window (Qualtrics)");
+                    return individualTrialData;
+                } else {
+                    // Old behavior for redirect mode - store in localStorage
+                    console.log("Running in redirect mode - storing processed trial data");
+                    localStorage.setItem('cm_task_completed_' + responseID, 'true');
+                    localStorage.setItem('cm_trial_data_' + responseID, JSON.stringify(individualTrialData));
+                    return individualTrialData;
+                }
+
+            } catch (error) {
+                console.error("Data transfer error:", error);
+                
+                // Send minimal completion signal even if data processing fails
+                if (embeddedMode && window.parent !== window) {
+                    window.parent.postMessage({
+                        type: 'CM_TASK_COMPLETE',
+                        data: { 
+                            cm_task_completed: true, 
+                            cm_error: 'data_processing_failed',
+                            cm_trial_data: [] 
+                        }
+                    }, '*');
+                }
+                return null;
+            }
+        }
+
+        function redirectToQualtrics() {
+            // Handle both embedded and redirect modes
+            if (embeddedMode) {
+                console.log('=== EMBEDDED MODE COMPLETION ===');
+                // Data was already sent in sendDataToQualtrics()
+                // Just show completion message
+                document.body.innerHTML = '<div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;"><h2 style="color: #28a745;">Task Complete!</h2><p style="font-size: 18px; margin: 20px 0;">Your data has been saved successfully.</p><p style="color: #666;">You can now continue with the survey.</p></div>';
+                return;
+            }
+            
+            // Original redirect mode behavior
+            const cmData = sendDataToQualtrics();
+            
+            if (cmData) {
+                console.log('=== STORING DATA IN BROWSER STORAGE ===');
+                
+                try {
+                    // Store completion flag and data in localStorage
+                    localStorage.setItem('cm_task_completed_' + responseID, 'true');
+                    localStorage.setItem('cm_task_data_' + responseID, JSON.stringify(cmData));
+                    
+                    console.log('Data stored successfully in localStorage');
+                    console.log('Completion key:', 'cm_task_completed_' + responseID);
+                    console.log('Data key:', 'cm_task_data_' + responseID);
+                    
+                    // REDIRECT TO PROLIFIC
+                    // Get Prolific PID from URL parameters
+                    var prolificPID = getUrlParameter('PROLIFIC_PID') || responseID;
+                    
+                    // Build Prolific redirect URL with completion code
+                    var prolificRedirectURL = 'https://app.prolific.com/submissions/complete?cc=C1CPRVCS';
+                    
+                    console.log('=== REDIRECTING TO PROLIFIC ===');
+                    console.log('Participant ID:', prolificPID);
+                    console.log('Redirect URL:', prolificRedirectURL);
+                    
+                    // Show completion message briefly before redirect
+                    document.body.innerHTML = '<div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;"><h2 style="color: #28a745;">Task Complete!</h2><p style="font-size: 18px; margin: 20px 0;">Your data has been saved successfully.</p><div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin: 20px auto; max-width: 600px;"><h3 style="color: #333; margin-top: 0;">Data Summary:</h3><p><strong>Total Trials:</strong> ' + cmData.length + '</p><p><strong>Participant ID:</strong> ' + prolificPID + '</p></div><div style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 8px; padding: 15px; margin: 20px auto; max-width: 600px;"><p style="margin: 0; color: #155724; font-size: 18px;"><strong>Redirecting to continue with remaining tasks...</strong></p><div style="margin-top: 10px;"><div style="width: 100%; background: #e9ecef; border-radius: 4px; overflow: hidden;"><div id="progress-bar" style="width: 0%; height: 8px; background: #28a745; transition: width 3s linear;"></div></div></div></div></div>';
+                    
+                    // Animate progress bar
+                    setTimeout(() => {
+                        document.getElementById('progress-bar').style.width = '100%';
+                    }, 100);
+                    
+                    // Redirect after 3 seconds
+                    setTimeout(() => {
+                        window.location.href = prolificRedirectURL;
+                    }, 3000);
+                    
+                } catch (error) {
+                    console.error('Error storing data:', error);
+                    // Even if storage fails, still redirect to Prolific
+                    console.log('Storage failed, but still redirecting to Prolific...');
+                    setTimeout(() => {
+                        window.location.href = 'https://app.prolific.com/submissions/complete?cc=C1CPRVCS';
+                    }, 2000);
+                }
+            } else {
+                console.log('No data available to store');
+                // Still redirect to Prolific even if no data
+                document.body.innerHTML = '<div style="text-align: center; padding: 50px;"><h2 style="color: #ffc107;">Warning: No Data Saved</h2><p>No task data was generated, but redirecting to continue...</p></div>';
+                setTimeout(() => {
+                    window.location.href = 'https://app.prolific.com/submissions/complete?cc=C1CPRVCS';
+                }, 3000);
+            }
+        }
+
+        var fullscr_off = {
+            type: 'fullscreen',
+            fullscreen_mode: false,
+            button_label: "Continue"
+        };
+
+        var goodbye = {
+            type: "html-keyboard-response",
+            stimulus: end_message,
+            choices: jsPsych.NO_KEYS,
+            trial_duration: 3000,
+            on_start: function() {
+                // Send data to Qualtrics when task completes
+                sendDataToQualtrics();
+            },
+            on_finish: function() {
+                console.log('=== EXPERIMENT FINISHED ===');
+                redirectToQualtrics();
+            }
+        };
+
+        // ===== ULTRA-SIMPLIFIED FLAT TIMELINE - ZERO NESTING =====
+        
+        console.log('=== BUILDING COMPLETELY FLAT TIMELINE ===');
+        
+        // Build timeline as single flat array - no nesting whatsoever
+        var flatTimeline = [];
+        
+        // 1. Start procedure
+        if (embeddedMode) {
+            flatTimeline.push(welcome, instructions);
+            console.log('Added: welcome, instructions');
+        } else {
+            flatTimeline.push(welcome, fullscr, instructions);
+            console.log('Added: welcome, fullscr, instructions');
+        }
+
+        // 2. Practice block
+        console.log('Building practice block with', n_practice_trials, 'trials...');
+        var practice_design = createTrialDesign(n_practice_trials);
+        
+        flatTimeline.push(block_start, block_get_ready);
+        console.log('Added: practice block_start, block_get_ready');
+        
+        for (let i = 0; i < practice_design.length; i++) {
+            // Create completely unique trial object for each practice trial
+            flatTimeline.push({
+                type: 'custom-continuous-movement-plugin',
+                fixation_duration: FIX,
+                time: practice_design[i].time,
+                t_stop_min: t_stop_min,
+                trial_type: practice_design[i].trial_type,
+                trial_duration: MAXRT,
+                tone: tone_stim,
+                feedback: function() { return block_ind == 0 },
+                feedback_duration: iFBT,
+                iti: ITI,
+                data: {
+                    block_i: 0,
+                    trial_i: i + 1,
+                    trial_type_data: practice_design[i].trial_type
+                },
+                on_start: function(data) {  
+                    trigger_write(10);
+                    fix_time = performance.now();
+                    if (!start_time) start_time = performance.now();
+                },
+                on_finish: function(data) {
+                    trial_type = data.trial_type_data || data.trial_type;
+                    count = data.count;
+                    start_signal = data.start_signal;
+                    stop_signal = data.stop_signal;
+                    stop_time = data.stop_time;  // ADDED: extract calculated stop time
+                    actual_stop_time = data.actual_stop_time;  // NEW: Extract actual stop time
+                    
+                    goRT = data.goRT;
+                    RT = data.RT;
+                    go_pos_x = data.go_pos_x;
+                    go_pos_y = data.go_pos_y;
+                    go_times = data.go_times;
+                    stop_pos_x = data.stop_pos_x;
+                    stop_pos_y = data.stop_pos_y;
+                    stop_times = data.stop_times;
+                    exclude = data.exclude;
+                    trial_ind++;
+
+                    // Block feedback tracking
+                    if (trial_type == 'go') {
+                        n_go++;
+                    } else {
+                        n_stop++;
+                    }
+                    if (exclude == 'too far from the circle') {
+                        inc++;
+                    } else if (exclude == 'wrong way') {
+                        ww++;
+                    } else if (exclude == 'too slow') {
+                        slow++;
+                    } else if (exclude == 'remember: don\'t stop too early') {
+                        early_ns++;
+                    }
+                    if (goRT != null) {
+                        av_goRT += goRT;
+                    }
+                    if (RT != null) {
+                        av_ssRT += RT;
+                    }
+                }
+            });
+            
+            // Add ITI after each trial
+            flatTimeline.push(iti);
+        }
+        
+        flatTimeline.push(block_feedback);
+        console.log('Added:', practice_design.length, 'practice trials + feedback');
+
+        // 3. Experimental blocks
+        for (let blockNum = 1; blockNum <= n_blocks_exp; blockNum++) {
+            console.log('Building experimental block', blockNum, 'with', n_trials_per_block, 'trials...');
+            var exp_design = createTrialDesign(n_trials_per_block);
+            
+            flatTimeline.push(block_start, block_get_ready);
+            console.log('Added: exp block', blockNum, 'start, get_ready');
+            
+            for (let i = 0; i < exp_design.length; i++) {
+                // Create completely unique trial object for each experimental trial
+                flatTimeline.push({
+                    type: 'custom-continuous-movement-plugin',
+                    fixation_duration: FIX,
+                    time: exp_design[i].time,
+                    t_stop_min: t_stop_min,
+                    trial_type: exp_design[i].trial_type,
+                    trial_duration: MAXRT,
+                    tone: tone_stim,
+                    feedback: function() { return block_ind == 0 }, // No feedback for experimental
+                    feedback_duration: iFBT,
+                    iti: ITI,
+                    data: {
+                        block_i: blockNum,
+                        trial_i: i + 1,
+                        trial_type_data: exp_design[i].trial_type
+                    },
+                    on_start: function(data) {  
+                        trigger_write(10);
+                        fix_time = performance.now();
+                        if (!start_time) start_time = performance.now();
+                    },
+                    on_finish: function(data) {
+                        trial_type = data.trial_type_data || data.trial_type;
+                        count = data.count;
+                        start_signal = data.start_signal;
+                        stop_signal = data.stop_signal;
+                        stop_time = data.stop_time;  // ADDED: extract calculated stop time
+                        actual_stop_time = data.actual_stop_time;  // NEW: Extract actual stop time
+                        
+                        goRT = data.goRT;
+                        RT = data.RT;
+                        go_pos_x = data.go_pos_x;
+                        go_pos_y = data.go_pos_y;
+                        go_times = data.go_times;
+                        stop_pos_x = data.stop_pos_x;
+                        stop_pos_y = data.stop_pos_y;
+                        stop_times = data.stop_times;
+                        exclude = data.exclude;
+                        trial_ind++;
+
+                        // Block feedback tracking
+                        if (trial_type == 'go') {
+                            n_go++;
+                        } else {
+                            n_stop++;
+                        }
+                        if (exclude == 'too far from the circle') {
+                            inc++;
+                        } else if (exclude == 'wrong way') {
+                            ww++;
+                        } else if (exclude == 'too slow') {
+                            slow++;
+                        } else if (exclude == 'remember: don\'t stop too early') {
+                            early_ns++;
+                        }
+                        if (goRT != null) {
+                            av_goRT += goRT;
+                        }
+                        if (RT != null) {
+                            av_ssRT += RT;
+                        }
+                    }
+                });
+                
+                // Add ITI after each trial
+                flatTimeline.push(iti);
+            }
+            
+            flatTimeline.push(block_feedback);
+            console.log('Added:', exp_design.length, 'exp trials + feedback for block', blockNum);
+        }
+
+        // 4. End procedure
+        if (embeddedMode) {
+            flatTimeline.push(goodbye);
+            console.log('Added: goodbye (embedded)');
+        } else {
+            flatTimeline.push(fullscr_off, goodbye);
+            console.log('Added: fullscr_off, goodbye');
+        }
+
+        // 5. Assign the flat timeline and validate
+        timeline = flatTimeline;
+        
+        console.log('=== TIMELINE VALIDATION ===');
+        console.log('Total timeline elements:', timeline.length);
+        
+        let trialCount = 0;
+        let itiCount = 0;
+        let otherCount = 0;
+        
+        timeline.forEach(function(element, index) {
+            if (element.type === 'custom-continuous-movement-plugin') {
+                trialCount++;
+                console.log('Trial', trialCount, 'at index', index, '- Block:', element.data ? element.data.block_i : 'unknown', 'Type:', element.trial_type);
+            } else if (element.type === 'html-keyboard-response' && element.stimulus === '') {
+                itiCount++;
+            } else {
+                otherCount++;
+            }
+        });
+        
+        console.log('=== FINAL COUNTS ===');
+        console.log('Expected trials:', n_practice_trials + (n_blocks_exp * n_trials_per_block));
+        console.log('Actual trials:', trialCount);
+        console.log('ITI elements:', itiCount);
+        console.log('Other elements (starts, feedback, etc.):', otherCount);
+        
+        if (trialCount === (n_practice_trials + (n_blocks_exp * n_trials_per_block))) {
+            console.log('✓ TIMELINE IS CORRECT - NO DUPLICATES');
+        } else {
+            console.error('❌ TIMELINE ERROR: Expected', n_practice_trials + (n_blocks_exp * n_trials_per_block), 'but got', trialCount);
+        }
+
+        // ===== START EXPERIMENT =====
+        jsPsych.init({
+            timeline: timeline,
+            preload_images: pre_load_stimuli,
+            preload_audio: [tone_stim],
+            on_start: function() {
+                createPhotodiodeBox();
+                console.log('CM experiment started');
+                console.log('Embedded mode:', embeddedMode);
+                
+                // Store experiment start time for duration calculation
+                start_time = performance.now();
+                
+                // Ensure the document has focus for keyboard events
+                setTimeout(() => {
+                    document.body.focus();
+                    document.body.tabIndex = -1;
+                    console.log('Document focus applied at startup');
+                }, 500);
+                
+                // Global click handler to maintain focus
+                document.addEventListener('click', function() {
+                    document.body.focus();
+                    console.log('Focus restored via click');
+                });
+            },
+            on_interaction_data_update: function(data) {
+                var interaction = data.event;
+                if (interaction.includes("fullscreen")){
+                    if (fullscr_ON == 'no') {fullscr_ON = 'yes'; return fullscr_ON}
+                    else if (fullscr_ON == 'yes') {fullscr_ON = 'no'; return fullscr_ON}
+                } else if (interaction == 'blur' || interaction == 'focus'){
+                    focus = interaction;
+                    return focus;
+                }
+            },
+            exclusions: {
+                min_width: minWidth,
+                min_height: minHeight
+            },
+            on_finish: function() {
+                console.log('Experiment completed');
+                // Final data send (backup in case goodbye trial didn't fire)
+                setTimeout(function() {
+                    sendDataToQualtrics();
+                    // Always redirect to Prolific on completion
+                    window.location.href = 'https://app.prolific.com/submissions/complete?cc=C1CPRVCS';
+                }, 1000);
+            }
+        });
+    </script>
+</body>
+</html>
